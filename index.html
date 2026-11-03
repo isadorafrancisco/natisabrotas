@@ -490,7 +490,15 @@ function go(route) { if (location.hash !== '#' + route) location.hash = route; e
 (function () {
   if (window.claude || !window.SB_CONFIG || !window.supabase) return;
   const cfg = window.SB_CONFIG;
-  const client = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+  let client;
+  try {
+    if (!/^https?:\/\/\S+$/.test(cfg.url || '') || !cfg.key || /COLE_AQUI/.test(cfg.key)) throw new Error('config');
+    client = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+  } catch (e) {
+    window.SB_ERR = 'config';
+    window.claude = { use: async () => null };
+    return;
+  }
   const T = 'docs';
   const cache = {};            // coleção -> Map(id -> dados)
   const colL = {};             // coleção -> Set(listeners de coleção)
@@ -1631,7 +1639,7 @@ function paint() {
   let content;
   if (!S.ready) content = h('div', { class: 'loading' }, 'Carregando os dados…');
   else { try { content = (ROUTES[S.route] || viewPainel)(); } catch (e) { console.error(e); content = h('div', { class: 'err' }, 'Não foi possível montar esta tela: ' + e.message); } }
-  const banner = !S.db && S.ready ? h('div', { class: 'banner' }, 'Não foi possível conectar ao banco de dados. Atualize a página; se continuar, confira a conexão com a internet ou avise quem cuida do sistema.') : null;
+  const banner = !S.db && S.ready ? h('div', { class: 'banner' }, window.SB_ERR === 'config' ? 'O sistema ainda não foi conectado ao banco de dados: falta preencher a URL e a chave do Supabase no arquivo config.js.' : 'Não foi possível conectar ao banco de dados. Atualize a página; se continuar, confira a conexão com a internet ou avise quem cuida do sistema.') : null;
   app.replaceChildren(sidebar(), h('main', { class: 'main' }, banner, content));
   window.scrollTo(0, y);
 }
