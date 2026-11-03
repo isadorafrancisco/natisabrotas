@@ -175,6 +175,12 @@ tr.open .caret{transform:rotate(90deg)}
 .band .kpi-l{color:rgba(255,255,255,.78)}
 .band .kpi-v{color:#fff;font-size:30px;font-weight:800}
 .band .kpi-s{color:var(--lime)}
+.kpi-v.ok{color:var(--ok)} .kpi-v.bad{color:var(--bad)} .kpi-v.warn{color:var(--warn)}
+b.neg{color:var(--bad)}
+.drop{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;border:2px dashed var(--line-strong);border-radius:16px;padding:24px 16px;background:var(--surface-2);cursor:pointer;color:var(--muted)}
+.drop:hover,.drop.on{border-color:var(--primary);background:var(--primary-soft)}
+.drop b{color:var(--fg)}
+.lrow .tick{margin-top:0}
 .sec-t{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:22px 0 10px}
 .goals{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0}
 .goal{padding:16px 18px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:7px;min-width:0}
@@ -343,6 +349,10 @@ const ICONS = {
   cidades: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   custos: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  fechamento: '<path d="M9 4H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.5" width="6" height="3.5" rx="1"/><path d="M9 13.5l2 2 4-4.5"/>',
+  clip: '<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>',
+  upload: '<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   download: '<path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/>',
@@ -407,10 +417,11 @@ const ETIQUETAS = { 'Captação': 'info', 'Triagem': 'viol', 'Orçamento': 'warn
 const DEFAULT_PREM = { salMin: 1621, insalPct: 0.2, encargos: 0.36, inss: 0.22, dias: 21, horas: 8, rateioNatisa: 0.5, aliquota: 0.053, margem: 0.15, piso: 0.10 };
 
 /* ================= estado e banco ================= */
-const COLS = ['editais', 'clientes', 'tarefas', 'cidades', 'funcionarios', 'equipamentos', 'custosfixos', 'orcamentos'];
+const COLS = ['editais', 'clientes', 'tarefas', 'cidades', 'funcionarios', 'equipamentos', 'custosfixos', 'orcamentos', 'contratos', 'medicoes', 'gastos', 'pendencias', 'arquivos'];
 const S = {
   db: null, dl: null, loaded: new Set(), ready: false,
-  data: { editais: [], clientes: [], tarefas: [], cidades: [], funcionarios: [], equipamentos: [], custosfixos: [], orcamentos: [] },
+  data: { editais: [], clientes: [], tarefas: [], cidades: [], funcionarios: [], equipamentos: [], custosfixos: [], orcamentos: [], contratos: [], medicoes: [], gastos: [], pendencias: [], arquivos: [] },
+  files: null, email: '', fechId: null,
   prem: Object.assign({}, DEFAULT_PREM), premSaved: false,
   route: 'painel',
   ui: {
@@ -419,6 +430,7 @@ const S = {
     cli: { aba: 'todos', q: '', status: '', empresa: '' },
     ag: { semana: weekStart(todayISO()), modo: 'dia', resp: '' },
     custosTab: 'resumo',
+    fech: { q: '', status: '', empresa: '', aba: 'resumo', up: null, cat: 'Contrato' },
     orc: null
   }
 };
@@ -667,6 +679,12 @@ function go(route) { if (location.hash !== '#' + route) location.hash = route; e
     client.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT') location.reload(); });
   }
 
+  const BUCKET = 'contratos';
+  const files = {
+    upload: async (path, file) => { const { error } = await client.storage.from(BUCKET).upload(path, file, { upsert: false, contentType: file.type || undefined, cacheControl: '3600' }); if (error) fail(error); },
+    url: async (path, filename) => { const { data, error } = await client.storage.from(BUCKET).createSignedUrl(path, 300, filename ? { download: filename } : undefined); if (error) fail(error); return data.signedUrl; },
+    remove: async paths => { if (!paths.length) return; const { error } = await client.storage.from(BUCKET).remove(paths); if (error) fail(error); },
+  };
   window.SB = {
     signOut: async () => {
       try { await client.auth.signOut({ scope: 'local' }); } catch (e) { console.error(e); }
@@ -678,6 +696,7 @@ function go(route) { if (location.hash !== '#' + route) location.hash = route; e
   window.claude = {
     use: async name => {
       if (name === 'downloads') return downloads;
+      if (name === 'files') return files;
       if (name !== 'db') return null;
       await ensureLogin();
       try { await start(); } catch (e) { console.error(e); return null; }
@@ -710,9 +729,9 @@ function findCidade(nome) { const n = norm(nome); return n ? S.data.cidades.find
 function orgaoNames() { return S.data.clientes.filter(c => c.tipo === 'Órgão público').map(c => c.nome); }
 
 /* ================= PAINEL ================= */
-function barList(items, max, kind) {
+function barList(items, max, kind, fmt) {
   return h('div', { class: 'blist' }, items.map(it => h('div', { class: 'brow' },
-    h('span', null, it[0]), h('div', { class: 'bar ' + (kind || '') }, h('i', { style: { width: (max ? it[1] / max * 100 : 0) + '%' } })), h('b', null, it[1]))));
+    h('span', null, it[0]), h('div', { class: 'bar ' + (kind || '') }, h('i', { style: { width: (max ? it[1] / max * 100 : 0) + '%' } })), h('b', null, fmt ? fmt(it[1]) : it[1]))));
 }
 function goalCard(label, atual, meta, o) {
   o = o || {};
@@ -928,9 +947,11 @@ function detalheEdital(e) {
       btn('Editar', { icon: 'edit', sm: true, onclick: () => editEdital(e) }),
       btn('Orçar', { icon: 'custos', sm: true, onclick: () => orcarEdital(e) }),
       btn('Criar checklist na agenda', { icon: 'agenda', sm: true, onclick: () => criarChecklistEdital(e) }),
+      isWin(e) ? btn(S.data.contratos.some(c => c.editalId === e.id) ? 'Ver fechamento' : 'Abrir fechamento', { icon: 'fechamento', sm: true, kind: 'primary', onclick: () => abrirFechamento(e) }) : null,
       btn('Excluir', { icon: 'trash', sm: true, kind: 'danger', onclick: () => excluirEdital(e) })));
 }
 async function excluirEdital(e) {
+  if (S.data.contratos.some(c => c.editalId === e.id)) { toast('Este edital tem um fechamento de licitação. Exclua o fechamento antes.', 'bad'); return; }
   if (await askConfirm({ title: 'Excluir edital', text: 'Excluir "' + (e.numero || e.objeto || e.orgao || 'edital') + '"? Os cartões da agenda ligados a ele continuam.', yes: 'Excluir', danger: true })) { await dbDelete('editais', e.id); toast('Edital excluído'); }
 }
 function exportEditais() {
@@ -1102,6 +1123,7 @@ function buildControl(fd, v) {
   if (fd.type === 'select') return sel(fd.opts, v, fd.blank === undefined ? '—' : fd.blank);
   if (fd.type === 'check') return h('input', { type: 'checkbox', checked: !!v });
   if (fd.type === 'textarea') { const t = h('textarea'); t.value = v || ''; return t; }
+  if (fd.type === 'date' || fd.type === 'month') return inp(fd.type, v);
   if (fd.type === 'pct') return inp('number', v == null ? null : Math.round(v * 10000) / 100, { min: '0', step: 'any' });
   if (fd.type === 'number') return inp('number', v, { min: fd.min == null ? '0' : fd.min, step: fd.step || 'any' });
   return inp('text', v);
@@ -1121,14 +1143,15 @@ function crudForm(spec, orig, after) {
   const save = async () => {
     const n = {};
     for (const fd of spec.fields) { n[fd.k] = readControl(fd, ctl[fd.k]); if (fd.req && (n[fd.k] === '' || n[fd.k] == null)) { err.textContent = 'Preencha: ' + fd.label.replace(' *', ''); err.hidden = false; return; } }
-    const doc = Object.assign({}, orig || {}, n); delete doc.id;
+    if (spec.pre) { const msg = spec.pre(n, orig); if (msg) { err.textContent = msg; err.hidden = false; return; } }
+    const doc = Object.assign({}, spec.extra || {}, orig || {}, n); delete doc.id;
     if (isNew) doc.criadoEm = Date.now();
     await dbSave(spec.col, orig && orig.id, doc);
     closeModal(); toast('Salvo');
   };
   openModal({
     title: (isNew ? 'Novo ' : 'Editar ') + spec.singular, body: [grid, areas, err],
-    footer: [!isNew ? h('button', { class: 'btn danger sp', type: 'button', onclick: async () => { if (await askConfirm({ title: 'Excluir', text: 'Excluir este registro?', yes: 'Excluir', danger: true })) { await dbDelete(spec.col, orig.id); closeModal(); toast('Excluído'); } } }, 'Excluir') : null,
+    footer: [!isNew && !spec.noDelete ? h('button', { class: 'btn danger sp', type: 'button', onclick: async () => { if (await askConfirm({ title: 'Excluir', text: 'Excluir este registro?', yes: 'Excluir', danger: true })) { await dbDelete(spec.col, orig.id); closeModal(); toast('Excluído'); } } }, 'Excluir') : null,
       h('button', { class: 'btn', type: 'button', onclick: closeModal }, 'Cancelar'),
       h('button', { class: 'btn primary', type: 'button', onclick: save }, 'Salvar')]
   });
@@ -1648,11 +1671,418 @@ function viewCustos() {
   else root.append(viewPremissas());
   return root;
 }
+/* ================= FECHAMENTO DE LICITAÇÃO (contratos ganhos) ================= */
+const STATUS_CONTRATO = ['Em execução', 'Encerrado', 'Suspenso', 'Rescindido'];
+const CATS_GASTO = ['Pessoal', 'Equipamentos e manutenção', 'Combustível', 'Materiais e insumos', 'Deslocamento e diárias', 'Impostos e taxas', 'Outros'];
+const CATS_DOC = ['Contrato', 'Ordem de serviço', 'Certidões', 'Garantia e seguro', 'Medição e nota fiscal', 'Fiscalização', 'Outros'];
+const MODELO_PEND = [
+  ['Assinar o contrato', 0], ['Receber a ordem de serviço', 3], ['Apresentar garantia contratual, se o edital exigir', 7],
+  ['Mobilizar equipe e equipamentos', 10], ['Enviar a primeira medição', 40], ['Avaliar renovação ou aditivo (60 dias antes do fim)', null]
+];
+const MAX_ARQUIVO = 50 * 1024 * 1024;
+const statusKind = s => ({ 'Em execução': 'ok', 'Encerrado': '', 'Suspenso': 'warn', 'Rescindido': 'bad' })[s] || '';
+const fmtBytes = n => n == null ? '—' : n < 1024 ? n + ' B' : n < 1048576 ? fmtN(n / 1024, 0) + ' KB' : fmtN(n / 1048576, 1) + ' MB';
+const compLabel = s => s ? MES3[+s.slice(5, 7) - 1] + '/' + s.slice(0, 4) : '—';
+function addMeses(dataISO, n) { const d = parseD(dataISO); d.setMonth(d.getMonth() + n); d.setDate(d.getDate() - 1); return iso(d); }
+
+function medSit(m) {
+  const fat = m.valorFaturado || 0, rec = m.valorRecebido || 0;
+  if (rec > 0 && rec >= fat - 0.005) return 'Recebido';
+  if (rec > 0) return 'Parcial';
+  if (m.previsao && m.previsao < todayISO()) return 'Atrasado';
+  return 'A receber';
+}
+const sitKind = s => ({ 'Recebido': 'ok', 'Parcial': 'info', 'Atrasado': 'bad', 'A receber': 'warn' })[s] || '';
+function orcDoContrato(c) {
+  const l = S.data.orcamentos.filter(o => o.editalId && o.editalId === c.editalId && o.res && o.res.custo);
+  return l.sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0))[0] || null;
+}
+function vigenciaInfo(c) {
+  if (!c.fimVigencia) return { txt: 'Sem vigência', kind: '', dias: null };
+  const dias = diffDays(c.fimVigencia, todayISO());
+  if (c.status !== 'Em execução') return { txt: 'Até ' + fmtD(c.fimVigencia), kind: '', dias };
+  if (dias < 0) return { txt: 'Vencido há ' + (-dias) + ' dia' + (dias === -1 ? '' : 's'), kind: 'bad', dias };
+  if (dias === 0) return { txt: 'Vence hoje', kind: 'bad', dias };
+  return { txt: 'Vence em ' + dias + ' dia' + (dias === 1 ? '' : 's'), kind: dias <= 30 ? 'bad' : dias <= 90 ? 'warn' : 'ok', dias };
+}
+function fechStats(c) {
+  const med = S.data.medicoes.filter(m => m.contratoId === c.id);
+  const gas = S.data.gastos.filter(g => g.contratoId === c.id);
+  const faturado = sum(med, m => m.valorFaturado), recebido = sum(med, m => m.valorRecebido);
+  const atrasado = sum(med.filter(m => medSit(m) === 'Atrasado'), m => (m.valorFaturado || 0) - (m.valorRecebido || 0));
+  const custoReal = sum(gas, g => g.valor);
+  const orc = orcDoContrato(c);
+  const aliq = S.prem.aliquota || 0;
+  const imposto = faturado * aliq;
+  const resultado = faturado - imposto - custoReal;
+  return { med, gas, faturado, recebido, aReceber: Math.max(0, faturado - recebido), atrasado, aFaturar: Math.max(0, (c.valorContratado || 0) - faturado),
+    custoReal, orc, custoOrc: orc ? orc.res.custo : null, aliq, imposto, resultado, margem: faturado > 0 ? resultado / faturado : null };
+}
+function tone(v) { return v > 0 ? 'ok' : v < 0 ? 'bad' : ''; }
+function fk(label, value, sub, t) { return h('div', { class: 'card kpi' }, h('span', { class: 'kpi-l' }, label), h('span', { class: 'kpi-v ' + (t || '') }, value), h('span', { class: 'kpi-s' }, sub || ' ')); }
+
+/* ---------- abrir / criar ---------- */
+async function criarFechamento(e) {
+  const o = S.data.orcamentos.filter(x => x.editalId === e.id).sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0))[0];
+  const doc = {
+    editalId: e.id, empresa: e.empresa && e.empresa !== 'Nenhuma' ? e.empresa : '', orgao: e.orgao || '', cidade: e.cidade || '', objeto: e.objeto || '',
+    numeroEdital: e.numero || '', modalidade: e.modalidade || '', numeroContrato: '', status: 'Em execução',
+    valorContratado: e.valorProposto || e.valorVencedor || e.valorEstimado || null, meses: o && o.meses ? o.meses : null,
+    dataAssinatura: '', ordemServico: '', inicioVigencia: '', fimVigencia: '', gestor: '', fiscal: '', contatoNome: '', contatoTel: '', contatoEmail: '', obs: '', criadoEm: Date.now()
+  };
+  const id = await dbSave('contratos', null, doc);
+  return id;
+}
+async function abrirFechamento(e) {
+  let c = S.data.contratos.find(x => x.editalId === e.id);
+  if (!c) { const id = await criarFechamento(e); toast('Fechamento aberto. Complete os dados do contrato.'); S.ui.fech.aba = 'dados'; go('fechamento/' + id); return; }
+  go('fechamento/' + c.id);
+}
+function novoFechamento() {
+  const livres = S.data.editais.filter(e => isWin(e) && !S.data.contratos.some(c => c.editalId === e.id));
+  if (!livres.length) {
+    openModal({ title: 'Novo fechamento', size: 'sm', body: [h('p', null, 'Não há edital ganho esperando fechamento. Na tela Editais, marque o resultado do edital como Atendido (ganhamos) e depois abra o fechamento por lá ou por aqui.')],
+      footer: [h('button', { class: 'btn', onclick: closeModal }, 'Fechar'), h('button', { class: 'btn primary', onclick: () => { closeModal(); go('editais'); } }, 'Ir para Editais')] });
+    return;
+  }
+  const s = sel(livres.map(e => ({ v: e.id, l: (e.numero ? e.numero + ' · ' : '') + (e.orgao || 'Sem órgão') + (e.valorProposto ? ' · ' + brl(e.valorProposto) : '') })), livres[0].id);
+  openModal({ title: 'Novo fechamento', size: 'sm', body: [h('p', { class: 'cell-s', style: { marginBottom: '10px' } }, 'Escolha o edital que ganhamos. Os dados dele já vêm para o fechamento.'), fld('Edital ganho', s)],
+    footer: [h('button', { class: 'btn', onclick: closeModal }, 'Cancelar'),
+      h('button', { class: 'btn primary', onclick: async () => { const e = byId('editais', s.value); closeModal(); if (e) abrirFechamento(e); } }, 'Abrir fechamento')] });
+}
+
+/* ---------- lista ---------- */
+function viewFechamento() {
+  if (S.fechId) { const c = byId('contratos', S.fechId); if (c) return viewContrato(c); }
+  const f = S.ui.fech;
+  const all = S.data.contratos;
+  const st = all.map(c => ({ c, s: fechStats(c), v: vigenciaInfo(c) }));
+  const ativos = st.filter(x => x.c.status === 'Em execução');
+  const root = h('div');
+  root.append(pageHead('Fechamento de licitações', all.length + (all.length === 1 ? ' contrato' : ' contratos') + ': tudo de cada licitação ganha em um lugar só',
+    btn('Novo fechamento', { kind: 'primary', icon: 'plus', onclick: novoFechamento })));
+  if (!all.length) {
+    root.append(h('div', { class: 'card' }, emptyState('Nenhuma licitação fechada ainda', 'Quando ganharmos um edital, abra o fechamento dele aqui (ou pelo botão "Abrir fechamento" no edital ganho). Cada contrato reúne dados, financeiro, custos, pendências e documentos.', btn('Novo fechamento', { kind: 'primary', icon: 'plus', onclick: novoFechamento }))));
+    return root;
+  }
+  root.append(h('div', { class: 'band' },
+    kpi('Em execução', ativos.length, 'contratos ativos'),
+    kpi('Valor contratado', brl(sum(ativos, x => x.c.valorContratado)), 'soma dos ativos'),
+    kpi('Faturado', brl(sum(st, x => x.s.faturado)), 'em todas as medições'),
+    kpi('A receber', brl(sum(st, x => x.s.aReceber)), sum(st, x => x.s.atrasado) > 0 ? brl(sum(st, x => x.s.atrasado)) + ' em atraso' : 'nada atrasado'),
+    kpi('Vigência acabando', ativos.filter(x => x.v.dias != null && x.v.dias <= 90).length, 'vencem em até 90 dias')));
+  const host = h('div', { class: 'card' });
+  const paintRows = () => {
+    const nq = norm(f.q);
+    const rows = st.filter(x => (!f.status || x.c.status === f.status) && (!f.empresa || x.c.empresa === f.empresa) &&
+      (!nq || norm([x.c.orgao, x.c.objeto, x.c.numeroContrato, x.c.numeroEdital, x.c.cidade].join(' ')).includes(nq)))
+      .sort((a, b) => (a.c.status === 'Em execução' ? 0 : 1) - (b.c.status === 'Em execução' ? 0 : 1) || (a.c.fimVigencia || '9999').localeCompare(b.c.fimVigencia || '9999'));
+    host.replaceChildren(rows.length ? h('div', { class: 'tbl-wrap' }, h('table', null,
+      h('thead', null, h('tr', null, ['Contrato', 'Empresa', 'Vigência', 'Valor contratado', 'Faturado', 'A receber', 'Situação'].map((t, i) => h('th', { class: i >= 3 && i <= 5 ? 'r' : '' }, t)))),
+      h('tbody', null, rows.map(x => h('tr', { class: 'row', tabindex: '0', onclick: () => go('fechamento/' + x.c.id), onkeydown: ev => { if (ev.key === 'Enter') go('fechamento/' + x.c.id); } },
+        h('td', null, h('div', { class: 'cell-t' }, x.c.orgao || 'Sem órgão', exTag(x.c)), h('div', { class: 'cell-s' }, (x.c.numeroContrato ? 'Contrato ' + x.c.numeroContrato + ' · ' : '') + (x.c.objeto || ''))),
+        h('td', null, x.c.empresa ? pill(x.c.empresa, empKind(x.c.empresa)) : '—'),
+        h('td', null, pill(x.v.txt, x.v.kind), x.c.fimVigencia ? h('div', { class: 'cell-s' }, 'fim ' + fmtD(x.c.fimVigencia)) : null),
+        h('td', { class: 'r' }, brl(x.c.valorContratado)), h('td', { class: 'r' }, brl(x.s.faturado)),
+        h('td', { class: 'r' }, x.s.atrasado > 0 ? h('span', { style: { color: 'var(--bad)', fontWeight: 700 } }, brl(x.s.aReceber)) : brl(x.s.aReceber)),
+        h('td', null, pill(x.c.status, statusKind(x.c.status))))))))
+      : emptyState('Nenhum contrato com esses filtros', 'Ajuste a busca ou a situação.'));
+  };
+  const upd = (k, ev) => { f[k] = ev.target.value; paintRows(); };
+  root.append(h('div', { class: 'card filters' },
+    fld('Buscar', h('div', { class: 'search' }, icon('search', 16), inp('text', f.q, { placeholder: 'Órgão, objeto, número…', oninput: ev => upd('q', ev) })), null, 'grow'),
+    fld('Situação', sel(STATUS_CONTRATO, f.status, 'Todas', { onchange: ev => upd('status', ev) })),
+    fld('Empresa', sel(EMP, f.empresa, 'Todas', { onchange: ev => upd('empresa', ev) }))));
+  paintRows(); root.append(host);
+  return root;
+}
+
+/* ---------- detalhe ---------- */
+const TABS_FECH = [['resumo', 'Resumo'], ['dados', 'Dados do contrato'], ['fin', 'Financeiro'], ['custos', 'Custos e lucro'], ['pend', 'Pendências'], ['docs', 'Documentos']];
+function viewContrato(c) {
+  const f = S.ui.fech, s = fechStats(c), v = vigenciaInfo(c);
+  const nDocs = S.data.arquivos.filter(a => a.contratoId === c.id).length;
+  const nPend = S.data.pendencias.filter(p => p.contratoId === c.id && p.tipo === 'pend' && !p.done).length;
+  const counts = { fin: s.med.length, custos: s.gas.length, pend: nPend, docs: nDocs };
+  const root = h('div');
+  root.append(h('button', { class: 'btn ghost sm', style: { marginBottom: '8px', paddingLeft: '4px' }, onclick: () => go('fechamento') }, icon('back', 15), 'Todos os fechamentos'));
+  root.append(pageHead(c.orgao || 'Contrato', c.objeto || '',
+    [btn('Editar dados', { icon: 'edit', onclick: () => editarContrato(c) }), btn('Excluir fechamento', { icon: 'trash', kind: 'danger', onclick: () => excluirContrato(c) })]));
+  root.append(h('div', { class: 'chips', style: { marginTop: '-6px' } },
+    c.empresa ? pill(c.empresa, empKind(c.empresa)) : null, pill(c.status, statusKind(c.status)), pill(v.txt, v.kind),
+    c.numeroContrato ? pill('Contrato ' + c.numeroContrato, 'info') : null, c.numeroEdital ? pill('Edital ' + c.numeroEdital) : null, exTag(c)));
+  root.append(h('div', { class: 'tabs', role: 'tablist' }, TABS_FECH.map(x => h('button', { class: 'tab', role: 'tab', 'aria-selected': String(f.aba === x[0]), onclick: () => { f.aba = x[0]; render(); } }, x[1], counts[x[0]] ? ' (' + counts[x[0]] + ')' : ''))));
+  const body = { resumo: tabResumo, dados: tabDados, fin: tabFin, custos: tabCustos, pend: tabPend, docs: tabDocs }[f.aba] || tabResumo;
+  root.append(body(c, s, v));
+  return root;
+}
+async function excluirContrato(c) {
+  const n = S.data.medicoes.filter(x => x.contratoId === c.id).length + S.data.gastos.filter(x => x.contratoId === c.id).length + S.data.pendencias.filter(x => x.contratoId === c.id).length + S.data.arquivos.filter(x => x.contratoId === c.id).length;
+  if (!await askConfirm({ title: 'Excluir fechamento', text: 'Excluir o fechamento de "' + (c.orgao || 'contrato') + '"? ' + (n ? 'Isso apaga também ' + n + ' registros ligados a ele (medições, custos, pendências e documentos). ' : '') + 'O edital continua na tela Editais.', yes: 'Excluir', danger: true })) return;
+  const arqs = S.data.arquivos.filter(a => a.contratoId === c.id);
+  if (arqs.length && S.files) { try { await S.files.remove(arqs.map(a => a.path)); } catch (e) { toast('Não foi possível apagar os arquivos: ' + e.message, 'bad'); return; } }
+  for (const col of ['medicoes', 'gastos', 'pendencias', 'arquivos']) for (const r of S.data[col].filter(x => x.contratoId === c.id)) await dbDelete(col, r.id);
+  await dbDelete('contratos', c.id); toast('Fechamento excluído'); go('fechamento');
+}
+
+/* ---------- aba Resumo ---------- */
+function tabResumo(c, s, v) {
+  const pctFat = c.valorContratado ? s.faturado / c.valorContratado : null;
+  const root = h('div');
+  root.append(h('div', { class: 'grid g-kpi' },
+    fk('Valor do contrato', brl(c.valorContratado), c.meses ? c.meses + ' meses' + (c.valorContratado ? ' · ' + brl(c.valorContratado / c.meses) + '/mês' : '') : 'duração não informada'),
+    fk('Faturado', brl(s.faturado), pctFat == null ? 'sem valor de contrato' : pct(pctFat, 0) + ' do contrato'),
+    fk('Recebido', brl(s.recebido), s.faturado ? pct(s.recebido / s.faturado, 0) + ' do faturado' : 'nada faturado', s.recebido > 0 ? 'ok' : ''),
+    fk('A receber', brl(s.aReceber), s.atrasado > 0 ? brl(s.atrasado) + ' em atraso' : 'nada atrasado', s.atrasado > 0 ? 'bad' : s.aReceber > 0 ? 'warn' : ''),
+    fk('A faturar', brl(s.aFaturar), 'saldo do contrato')));
+  const vigBar = (() => {
+    if (!c.inicioVigencia || !c.fimVigencia) return h('p', { class: 'cell-s' }, 'Informe o início e o fim da vigência em Dados do contrato para acompanhar o prazo.');
+    const tot = Math.max(1, diffDays(c.fimVigencia, c.inicioVigencia)), dec = Math.min(tot, Math.max(0, diffDays(todayISO(), c.inicioVigencia)));
+    return h('div', null, h('div', { class: 'bar ' + (v.kind === 'bad' ? 'bad' : v.kind === 'warn' ? 'warn' : 'ok'), style: { margin: '8px 0 6px' } }, h('i', { style: { width: (dec / tot * 100) + '%' } })),
+      h('div', { class: 'cell-s', style: { display: 'flex', justifyContent: 'space-between' } }, h('span', null, fmtD(c.inicioVigencia)), h('span', null, pct(dec / tot, 0) + ' do prazo'), h('span', null, fmtD(c.fimVigencia))));
+  })();
+  const dif = s.custoOrc != null ? s.custoReal - s.custoOrc : null;
+  root.append(h('div', { class: 'grid g-2', style: { marginTop: '16px' } },
+    h('div', { class: 'card card-p' }, h('h3', null, 'Vigência'), h('p', { class: 'sub' }, v.txt), vigBar),
+    h('div', { class: 'card card-p' }, h('h3', null, 'Resultado até agora'), h('p', { class: 'sub' }, 'Faturado, menos imposto estimado e custo real'),
+      h('div', { class: 'kv', style: { marginTop: '8px' } }, h('span', null, 'Custo real lançado'), h('b', null, brl(s.custoReal))),
+      s.custoOrc != null ? h('div', { class: 'kv' }, h('span', null, 'Custo orçado do contrato'), h('b', null, brl(s.custoOrc) + (dif != null ? ' (' + (dif <= 0 ? '' : '+') + brl(dif) + ' no real)' : ''))) : null,
+      h('div', { class: 'kv' }, h('span', null, 'Resultado'), h('b', { class: tone(s.resultado) === 'bad' ? 'neg' : '' }, s.faturado ? brl(s.resultado) : '—')),
+      h('div', { class: 'kv' }, h('span', null, 'Margem'), h('b', null, s.margem == null ? '—' : pct(s.margem, 1))))));
+  // próximos prazos
+  const pz = [];
+  S.data.pendencias.filter(p => p.contratoId === c.id && p.tipo === 'pend' && !p.done && p.prazo).forEach(p => pz.push({ d: p.prazo, t: p.titulo, k: 'Pendência' }));
+  if (c.status === 'Em execução' && c.fimVigencia) pz.push({ d: c.fimVigencia, t: 'Fim da vigência do contrato', k: 'Vigência' });
+  s.med.filter(m => medSit(m) !== 'Recebido' && m.previsao).forEach(m => pz.push({ d: m.previsao, t: 'Receber medição de ' + compLabel(m.competencia) + ' (' + brl((m.valorFaturado || 0) - (m.valorRecebido || 0)) + ')', k: 'Recebimento' }));
+  pz.sort((a, b) => a.d.localeCompare(b.d));
+  const today = todayISO();
+  root.append(h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Próximos prazos'),
+    pz.length ? pz.slice(0, 8).map(p => { const dd2 = diffDays(p.d, today); return h('div', { class: 'lrow' },
+      h('div', { class: 'd' }, p.d.slice(8, 10), h('small', null, MES3[+p.d.slice(5, 7) - 1])),
+      h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { class: 'cell-t' }, p.t), h('div', { class: 'cell-s' }, p.k)),
+      pill(dd2 < 0 ? 'atrasado ' + (-dd2) + ' d' : dd2 === 0 ? 'hoje' : 'em ' + dd2 + ' dias', dd2 < 0 ? 'bad' : dd2 <= 7 ? 'warn' : '')); })
+      : h('p', { class: 'cell-s', style: { marginTop: '10px' } }, 'Nenhum prazo em aberto. Cadastre pendências com data na aba Pendências.')));
+  return root;
+}
+
+/* ---------- aba Dados ---------- */
+const SPEC_CONTRATO = {
+  col: 'contratos', singular: 'dados do contrato', noDelete: true,
+  fields: [
+    { k: 'numeroContrato', label: 'Número do contrato', type: 'text' },
+    { k: 'status', label: 'Situação', type: 'select', opts: STATUS_CONTRATO, blank: undefined },
+    { k: 'valorContratado', label: 'Valor do contrato (R$)', type: 'number' },
+    { k: 'meses', label: 'Duração (meses)', type: 'number', step: '1', hint: 'Com o início da vigência, o fim é calculado se estiver vazio.' },
+    { k: 'dataAssinatura', label: 'Data de assinatura', type: 'date' },
+    { k: 'ordemServico', label: 'Ordem de serviço', type: 'date' },
+    { k: 'inicioVigencia', label: 'Início da vigência', type: 'date' },
+    { k: 'fimVigencia', label: 'Fim da vigência', type: 'date' },
+    { k: 'gestor', label: 'Gestor do contrato (órgão)', type: 'text' },
+    { k: 'fiscal', label: 'Fiscal do contrato', type: 'text' },
+    { k: 'contatoNome', label: 'Contato: nome', type: 'text' },
+    { k: 'contatoTel', label: 'Contato: telefone', type: 'text' },
+    { k: 'contatoEmail', label: 'Contato: e-mail', type: 'text' },
+    { k: 'obs', label: 'Observações', type: 'textarea' }],
+  pre: n => { if (n.inicioVigencia && n.meses && !n.fimVigencia) n.fimVigencia = addMeses(n.inicioVigencia, Math.round(n.meses)); if (n.inicioVigencia && n.fimVigencia && n.fimVigencia < n.inicioVigencia) return 'O fim da vigência não pode ser antes do início.'; }
+};
+function editarContrato(c) { crudForm(SPEC_CONTRATO, c); }
+function tabDados(c) {
+  const e = byId('editais', c.editalId);
+  return h('div', { class: 'card card-p' },
+    h('dl', { class: 'dgrid', style: { margin: 0 } },
+      dd('Órgão', c.orgao), dd('Cidade', c.cidade), dd('Empresa (CNPJ) do contrato', c.empresa), dd('Situação', c.status),
+      dd('Número do contrato', c.numeroContrato), dd('Número do edital', c.numeroEdital), dd('Modalidade', c.modalidade), dd('Valor do contrato', brl(c.valorContratado, true)),
+      dd('Assinatura', fmtD(c.dataAssinatura)), dd('Ordem de serviço', fmtD(c.ordemServico)), dd('Início da vigência', fmtD(c.inicioVigencia)), dd('Fim da vigência', fmtD(c.fimVigencia)),
+      dd('Duração', c.meses ? c.meses + ' meses' : null), dd('Gestor do contrato', c.gestor), dd('Fiscal do contrato', c.fiscal),
+      dd('Contato do órgão', [c.contatoNome, c.contatoTel, c.contatoEmail].filter(Boolean).join(' · ')),
+      dd('Objeto', c.objeto, true), e && e.exigencias ? dd('O que o edital exigia', e.exigencias, true) : null, dd('Observações', c.obs, true)),
+    h('div', { class: 'dact' },
+      btn('Editar dados', { icon: 'edit', sm: true, kind: 'primary', onclick: () => editarContrato(c) }),
+      e ? btn('Ver o edital', { icon: 'editais', sm: true, onclick: () => { S.ui.ed.q = e.numero || e.orgao || ''; S.ui.ed.open.add(e.id); go('editais'); } }) : null));
+}
+
+/* ---------- aba Financeiro ---------- */
+function specMedicao(c) {
+  const mensal = c.valorContratado && c.meses ? Math.round(c.valorContratado / c.meses * 100) / 100 : null;
+  const ult = S.data.medicoes.filter(m => m.contratoId === c.id).map(m => m.competencia).sort().pop();
+  let comp = todayISO().slice(0, 7); if (ult) { const d = new Date(+ult.slice(0, 4), +ult.slice(5, 7), 1); comp = d.getFullYear() + '-' + pad(d.getMonth() + 1); }
+  return {
+    col: 'medicoes', singular: 'medição', extra: { contratoId: c.id }, defaults: { competencia: comp, valorFaturado: mensal },
+    fields: [
+      { k: 'competencia', label: 'Competência (mês) *', type: 'month', req: true },
+      { k: 'descricao', label: 'Descrição', type: 'text' },
+      { k: 'nf', label: 'Nota fiscal', type: 'text' },
+      { k: 'valorFaturado', label: 'Valor faturado (R$) *', type: 'number', req: true },
+      { k: 'dataEmissao', label: 'Data de emissão', type: 'date' },
+      { k: 'previsao', label: 'Previsão de recebimento', type: 'date' },
+      { k: 'dataRecebimento', label: 'Data do recebimento', type: 'date', hint: 'Deixe em branco enquanto não receber.' },
+      { k: 'valorRecebido', label: 'Valor recebido (R$)', type: 'number', hint: 'Se vazio e houver data de recebimento, vale o valor faturado.' },
+      { k: 'obs', label: 'Observações', type: 'textarea' }],
+    pre: n => { if (n.dataRecebimento && n.valorRecebido == null) n.valorRecebido = n.valorFaturado; if (n.valorRecebido > 0 && !n.dataRecebimento) return 'Informe a data do recebimento.'; if (!n.dataRecebimento && n.valorRecebido == null) n.valorRecebido = null; }
+  };
+}
+function tabFin(c, s) {
+  const spec = specMedicao(c);
+  spec.cols = [
+    { h: 'Competência', f: r => h('span', { class: 'cell-t' }, compLabel(r.competencia)) },
+    { h: 'Descrição / NF', f: r => [r.descricao || '', r.nf ? h('div', { class: 'cell-s' }, 'NF ' + r.nf) : null] },
+    { h: 'Faturado', r: true, f: r => brl(r.valorFaturado, true) },
+    { h: 'Emissão', f: r => fmtD(r.dataEmissao) }, { h: 'Previsão', f: r => fmtD(r.previsao) },
+    { h: 'Recebido', r: true, f: r => r.valorRecebido ? brl(r.valorRecebido, true) + (r.dataRecebimento ? ' em ' + fmtS(r.dataRecebimento) : '') : '—' },
+    { h: 'Situação', f: r => pill(medSit(r), sitKind(medSit(r))) },
+    { h: '', f: r => medSit(r) === 'Recebido' ? '' : h('button', { class: 'btn sm', type: 'button', onclick: ev => { ev.stopPropagation(); dbUpdate('medicoes', r.id, { dataRecebimento: todayISO(), valorRecebido: r.valorFaturado }); toast('Marcado como recebido'); } }, 'Marcar recebido') }];
+  spec.emptyTitle = 'Nenhuma medição lançada'; spec.emptyText = 'Lance cada medição ou nota fiscal enviada ao órgão. O sistema soma o que foi faturado, o que já entrou e o que falta receber.';
+  spec.footer = rows => h('tr', null, h('td', { colspan: 2 }, h('b', null, 'Total')), h('td', { class: 'r' }, h('b', null, brl(sum(rows, r => r.valorFaturado), true))), h('td', null), h('td', null), h('td', { class: 'r' }, h('b', null, brl(sum(rows, r => r.valorRecebido), true))), h('td', null), h('td', null));
+  const rows = s.med.slice().sort((a, b) => (b.competencia || '').localeCompare(a.competencia || ''));
+  const pctFat = c.valorContratado ? s.faturado / c.valorContratado : null;
+  return h('div', null,
+    h('div', { class: 'grid g-kpi' },
+      fk('Valor do contrato', brl(c.valorContratado), 'total contratado'),
+      fk('Faturado', brl(s.faturado), pctFat == null ? ' ' : pct(pctFat, 0) + ' do contrato'),
+      fk('Recebido', brl(s.recebido), ' ', s.recebido > 0 ? 'ok' : ''),
+      fk('A receber', brl(s.aReceber), s.atrasado > 0 ? brl(s.atrasado) + ' em atraso' : ' ', s.atrasado > 0 ? 'bad' : s.aReceber > 0 ? 'warn' : ''),
+      fk('A faturar', brl(s.aFaturar), 'saldo do contrato')),
+    s.faturado > (c.valorContratado || Infinity) + 0.005 ? h('div', { class: 'banner', style: { marginTop: '14px' } }, 'Atenção: o total faturado passou do valor do contrato (' + brl(s.faturado - c.valorContratado) + ' a mais). Confira se há aditivo.') : null,
+    h('div', { class: 'card', style: { marginTop: '16px' } },
+      h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Medições e recebimentos'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), btn('Nova medição', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specMedicao(c), null) })),
+      crudTable(spec, rows)));
+}
+
+/* ---------- aba Custos ---------- */
+function specGasto(c) {
+  return { col: 'gastos', singular: 'custo', extra: { contratoId: c.id }, defaults: { data: todayISO(), categoria: 'Pessoal' },
+    fields: [{ k: 'data', label: 'Data *', type: 'date', req: true }, { k: 'categoria', label: 'Categoria *', type: 'select', opts: CATS_GASTO, blank: undefined, req: true },
+      { k: 'descricao', label: 'Descrição', type: 'text' }, { k: 'valor', label: 'Valor (R$) *', type: 'number', req: true }] };
+}
+function tabCustos(c, s) {
+  const spec = specGasto(c);
+  spec.cols = [{ h: 'Data', f: r => fmtD(r.data) }, { h: 'Categoria', f: r => pill(r.categoria || 'Outros') }, { h: 'Descrição', f: r => r.descricao || '' }, { h: 'Valor', r: true, f: r => brl(r.valor, true) }];
+  spec.emptyTitle = 'Nenhum custo lançado'; spec.emptyText = 'Lance os gastos reais do contrato (folha, combustível, manutenção, materiais…). Assim o sistema compara com o orçado e mostra o lucro de verdade.';
+  spec.footer = rows => h('tr', null, h('td', { colspan: 3 }, h('b', null, 'Total')), h('td', { class: 'r' }, h('b', null, brl(sum(rows, r => r.valor), true))));
+  const rows = s.gas.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+  const porCat = {}; s.gas.forEach(g => { const k = g.categoria || 'Outros'; porCat[k] = (porCat[k] || 0) + (g.valor || 0); });
+  const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+  const cm = cats.length ? cats[0][1] : 1;
+  const consumo = s.custoOrc ? s.custoReal / s.custoOrc : null;
+  return h('div', null,
+    h('div', { class: 'grid g-kpi' },
+      fk('Custo real', brl(s.custoReal), s.gas.length + ' lançamento' + (s.gas.length === 1 ? '' : 's')),
+      fk('Custo orçado', s.custoOrc != null ? brl(s.custoOrc) : '—', s.custoOrc != null ? (consumo != null ? pct(consumo, 0) + ' já consumido' : ' ') : 'sem orçamento ligado ao edital'),
+      fk('Faturado', brl(s.faturado), 'imposto estimado ' + brl(s.imposto) + ' (' + pct(s.aliq, 1) + ')'),
+      fk('Resultado', s.faturado ? brl(s.resultado) : '—', s.margem == null ? 'sem faturamento ainda' : 'margem de ' + pct(s.margem, 1), s.faturado ? tone(s.resultado) : ''),
+      fk('Resultado por real gasto', s.custoReal ? fmtN(s.resultado / s.custoReal, 2) : '—', 'lucro para cada R$ 1 de custo')),
+    consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Custos e orçamento)'),
+      h('div', { class: 'bar ' + (consumo > 1 ? 'bad' : consumo > 0.85 ? 'warn' : 'ok'), style: { margin: '10px 0 6px' } }, h('i', { style: { width: Math.min(100, consumo * 100) + '%' } })),
+      h('div', { class: 'cell-s' }, brl(s.custoReal) + ' de ' + brl(s.custoOrc) + (consumo > 1 ? ': passou do orçado' : ''))) : null,
+    cats.length ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custos por categoria'), barList(cats.map(x => [x[0], x[1]]), cm, '', v => brl(v))) : null,
+    h('div', { class: 'card', style: { marginTop: '16px' } },
+      h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Custos lançados'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), btn('Novo custo', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specGasto(c), null) })),
+      crudTable(spec, rows)));
+}
+
+/* ---------- aba Pendências e anotações ---------- */
+function specPend(c) {
+  return { col: 'pendencias', singular: 'pendência', extra: { contratoId: c.id, tipo: 'pend' }, fields: [{ k: 'titulo', label: 'O que precisa ser feito *', type: 'text', req: true }, { k: 'prazo', label: 'Prazo', type: 'date' }, { k: 'done', label: 'Já foi feito', type: 'check' }, { k: 'obs', label: 'Observações', type: 'textarea' }] };
+}
+function specNota(c) {
+  return { col: 'pendencias', singular: 'anotação', extra: { contratoId: c.id, tipo: 'nota' }, defaults: { data: todayISO() }, fields: [{ k: 'data', label: 'Data *', type: 'date', req: true }, { k: 'texto', label: 'Anotação ou ocorrência *', type: 'textarea', req: true }] };
+}
+async function modeloPendencias(c) {
+  const have = new Set(S.data.pendencias.filter(p => p.contratoId === c.id).map(p => p.modelo));
+  const base = c.inicioVigencia || todayISO(); let n = 0;
+  for (let i = 0; i < MODELO_PEND.length; i++) {
+    const key = 'mod-' + i; if (have.has(key)) continue;
+    const [t, off] = MODELO_PEND[i];
+    const prazo = off == null ? (c.fimVigencia ? addDays(c.fimVigencia, -60) : '') : addDays(base, off);
+    await dbSave('pendencias', null, { contratoId: c.id, tipo: 'pend', titulo: t, prazo, done: false, obs: '', modelo: key, criadoEm: Date.now() + i }); n++;
+  }
+  toast(n ? n + ' pendências criadas' : 'O modelo já foi criado');
+}
+function tabPend(c) {
+  const all = S.data.pendencias.filter(p => p.contratoId === c.id);
+  const pend = all.filter(p => p.tipo === 'pend').sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.prazo || '9999').localeCompare(b.prazo || '9999'));
+  const notas = all.filter(p => p.tipo === 'nota').sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+  const today = todayISO();
+  return h('div', null,
+    h('div', { class: 'card card-p' },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' } }, h('div', null, h('h3', null, 'Pendências e prazos'), h('p', { class: 'sub' }, 'Garantia, seguro, primeira medição, renovação…')),
+        h('div', { class: 'dact', style: { margin: 0 } }, btn('Modelo de pendências', { sm: true, onclick: () => modeloPendencias(c) }), btn('Nova pendência', { kind: 'primary', icon: 'plus', sm: true, onclick: () => crudForm(specPend(c), null) }))),
+      pend.length ? pend.map(p => { const dias = p.prazo ? diffDays(p.prazo, today) : null; return h('div', { class: 'lrow', style: { opacity: p.done ? .6 : 1 } },
+        h('button', { class: 'tick' + (p.done ? ' on' : ''), type: 'button', 'aria-label': p.done ? 'Reabrir' : 'Marcar como feito', 'aria-pressed': String(!!p.done), onclick: () => dbUpdate('pendencias', p.id, { done: !p.done }) }, p.done ? icon('check', 14) : null),
+        h('div', { style: { flex: 1, minWidth: 0, cursor: 'pointer' }, onclick: () => crudForm(specPend(c), p) }, h('div', { class: 'cell-t', style: { textDecoration: p.done ? 'line-through' : 'none' } }, p.titulo), p.obs ? h('div', { class: 'cell-s' }, p.obs) : null),
+        p.prazo ? pill(p.done ? fmtD(p.prazo) : dias < 0 ? 'atrasada ' + (-dias) + ' d' : dias === 0 ? 'hoje' : fmtD(p.prazo), p.done ? '' : dias < 0 ? 'bad' : dias <= 7 ? 'warn' : '') : null); })
+        : emptyState('Nenhuma pendência', 'Use o "Modelo de pendências" para começar com a lista padrão, ou crie a sua.')),
+    h('div', { class: 'card card-p', style: { marginTop: '16px' } },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' } }, h('div', null, h('h3', null, 'Anotações e ocorrências'), h('p', { class: 'sub' }, 'Reuniões, pedidos do fiscal, problemas, combinados')), btn('Nova anotação', { icon: 'plus', sm: true, onclick: () => crudForm(specNota(c), null) })),
+      notas.length ? notas.map(n => h('div', { class: 'lrow', style: { alignItems: 'flex-start', cursor: 'pointer' }, onclick: () => crudForm(specNota(c), n) },
+        h('div', { class: 'd' }, (n.data || '').slice(8, 10), h('small', null, MES3[+(n.data || '').slice(5, 7) - 1] || '')), h('div', { style: { flex: 1, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, n.texto)))
+        : h('p', { class: 'cell-s' }, 'Nenhuma anotação ainda.')));
+}
+
+/* ---------- aba Documentos ---------- */
+const safeName = n => n.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(-80) || 'arquivo';
+async function enviarArquivos(c, fileList) {
+  const f = S.ui.fech; const list = [...fileList]; if (!list.length) return;
+  if (!S.files) { toast('Anexos só funcionam no site publicado.', 'bad'); return; }
+  let ok = 0;
+  for (let i = 0; i < list.length; i++) {
+    const file = list[i];
+    f.up = { msg: 'Enviando ' + (i + 1) + ' de ' + list.length + ': ' + file.name }; render();
+    if (file.size > MAX_ARQUIVO) { toast('"' + file.name + '" passa de 50 MB e não foi enviado.', 'bad'); continue; }
+    const path = c.id + '/' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + '-' + safeName(file.name);
+    try {
+      await S.files.upload(path, file);
+      await dbSave('arquivos', null, { contratoId: c.id, nome: file.name, categoria: f.cat, path, tamanho: file.size, tipo: file.type || '', enviadoEm: Date.now(), enviadoPor: S.email || '' });
+      ok++;
+    } catch (e) {
+      const m = (e && e.message) || 'erro';
+      toast('Não foi possível enviar "' + file.name + '": ' + (/bucket/i.test(m) ? 'falta criar o armazenamento no Supabase (rodar o SQL de documentos).' : m), 'bad');
+    }
+  }
+  f.up = null; render(); if (ok) toast(ok === 1 ? 'Arquivo enviado' : ok + ' arquivos enviados');
+}
+async function abrirArquivo(a, baixar) {
+  try {
+    const url = await S.files.url(a.path, baixar ? a.nome : undefined);
+    const el = document.createElement('a'); el.href = url; if (!baixar) { el.target = '_blank'; el.rel = 'noopener'; } document.body.append(el); el.click(); el.remove();
+  } catch (e) { toast('Não foi possível abrir o arquivo: ' + ((e && e.message) || 'erro'), 'bad'); }
+}
+async function excluirArquivo(a) {
+  if (!await askConfirm({ title: 'Excluir documento', text: 'Excluir "' + a.nome + '"? O arquivo é apagado de vez.', yes: 'Excluir', danger: true })) return;
+  try { if (S.files) await S.files.remove([a.path]); } catch (e) { toast('Não foi possível apagar o arquivo: ' + ((e && e.message) || 'erro'), 'bad'); return; }
+  await dbDelete('arquivos', a.id); toast('Documento excluído');
+}
+function tabDocs(c) {
+  const f = S.ui.fech;
+  const docs = S.data.arquivos.filter(a => a.contratoId === c.id).sort((a, b) => (b.enviadoEm || 0) - (a.enviadoEm || 0));
+  if (!S.files) return h('div', { class: 'card' }, emptyState('Anexos disponíveis só no site', 'O envio de arquivos funciona no endereço publicado do sistema (github.io), com login. ' + (docs.length ? 'Há ' + docs.length + ' documento(s) cadastrados para este contrato.' : '')));
+  const inpF = h('input', { type: 'file', multiple: true, hidden: true, 'aria-label': 'Escolher arquivos' });
+  inpF.addEventListener('change', () => { const l = [...inpF.files]; inpF.value = ''; enviarArquivos(c, l); });
+  const drop = h('label', { class: 'drop', tabindex: '0' }, icon('upload', 22), h('b', null, f.up ? f.up.msg : 'Arraste os arquivos aqui ou clique para escolher'), h('span', { class: 'cell-s' }, 'PDF, fotos, planilhas, documentos · até 50 MB cada'), inpF);
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, ev => { ev.preventDefault(); drop.classList.add('on'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, ev => { ev.preventDefault(); drop.classList.remove('on'); }));
+  drop.addEventListener('drop', ev => { if (ev.dataTransfer && ev.dataTransfer.files.length) enviarArquivos(c, ev.dataTransfer.files); });
+  drop.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); inpF.click(); } });
+  const catSel = sel(CATS_DOC, f.cat, undefined, { 'aria-label': 'Categoria dos próximos arquivos', onchange: ev => { f.cat = ev.target.value; } });
+  return h('div', null,
+    h('div', { class: 'card card-p' }, h('div', { style: { display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '12px' } },
+      h('label', { class: 'fld', style: { minWidth: '220px' } }, h('span', { class: 'fld-l' }, 'Categoria dos próximos arquivos'), catSel),
+      h('p', { class: 'cell-s', style: { flex: 1, minWidth: '200px' } }, 'Os documentos ficam guardados em área privada: só quem tem login no sistema consegue abrir.')), drop),
+    h('div', { class: 'card', style: { marginTop: '16px' } }, docs.length ? h('div', { class: 'tbl-wrap' }, h('table', null,
+      h('thead', null, h('tr', null, ['Documento', 'Categoria', 'Tamanho', 'Enviado', ''].map((t, i) => h('th', { class: i === 2 ? 'r' : '' }, t)))),
+      h('tbody', null, docs.map(a => h('tr', null,
+        h('td', null, h('span', { class: 'cell-t' }, a.nome)),
+        h('td', null, pill(a.categoria || 'Outros')), h('td', { class: 'r' }, fmtBytes(a.tamanho)),
+        h('td', null, fmtD(iso(new Date(a.enviadoEm || Date.now()))), a.enviadoPor ? h('div', { class: 'cell-s' }, a.enviadoPor) : null),
+        h('td', { class: 'r nw' }, h('div', { class: 'dact', style: { margin: 0, justifyContent: 'flex-end' } },
+          btn('Abrir', { sm: true, onclick: () => abrirArquivo(a, false) }), btn('Baixar', { sm: true, icon: 'download', onclick: () => abrirArquivo(a, true) }), btn('Excluir', { sm: true, kind: 'danger', icon: 'trash', aria: 'Excluir ' + a.nome, onclick: () => excluirArquivo(a) }))))))))
+      : emptyState('Nenhum documento ainda', 'Anexe o contrato assinado, a ordem de serviço, certidões, garantia, notas fiscais e o que mais precisar.')));
+}
 /* ================= shell, rotas e inicialização ================= */
-const ROUTES = { painel: viewPainel, editais: viewEditais, agenda: viewAgenda, clientes: viewClientes, cidades: viewCidades, custos: viewCustos };
+const ROUTES = { painel: viewPainel, editais: viewEditais, agenda: viewAgenda, clientes: viewClientes, cidades: viewCidades, custos: viewCustos, fechamento: viewFechamento };
 const NAV = [
   { g: 'Visão geral', items: [['painel', 'Painel']] },
-  { g: 'Operação', items: [['editais', 'Editais'], ['agenda', 'Agenda semanal']] },
+  { g: 'Operação', items: [['editais', 'Editais'], ['fechamento', 'Fechamento'], ['agenda', 'Agenda semanal']] },
   { g: 'Cadastros', items: [['clientes', 'Clientes'], ['cidades', 'Cidades']] },
   { g: 'Custos', items: [['custos', 'Custos e orçamento']] }
 ];
@@ -1660,6 +2090,7 @@ const app = document.getElementById('app');
 function navCount(r) {
   if (r === 'editais') return S.data.editais.length || '';
   if (r === 'clientes') return S.data.clientes.length || '';
+  if (r === 'fechamento') return S.data.contratos.filter(c => c.status === 'Em execução').length || '';
   if (r === 'agenda') return S.data.tarefas.filter(t => t.status !== 'done' && t.data && t.data < todayISO()).length || '';
   return '';
 }
@@ -1695,10 +2126,14 @@ function paint() {
 let rafId = 0;
 function render() { if (rafId) return; rafId = requestAnimationFrame(() => { rafId = 0; paint(); }); }
 function setRoute() {
-  const r = location.hash.slice(1);
+  const parts = location.hash.slice(1).split('/');
+  const r = parts[0];
   const next = ROUTES[r] ? r : 'painel';
-  const changed = next !== S.route;
-  S.route = next; render();
+  const fid = next === 'fechamento' && parts[1] ? decodeURIComponent(parts[1]) : null;
+  const changed = next !== S.route || fid !== S.fechId;
+  S.route = next; S.fechId = fid;
+  if (changed) S.ui.fech.aba = 'resumo';
+  render();
   if (changed) window.scrollTo(0, 0);
 }
 async function boot() {
@@ -1706,9 +2141,9 @@ async function boot() {
   setRoute(); render();
   const cl = window.claude;
   if (!cl || !cl.use) { S.ready = true; render(); return; }
-  let db = null, dl = null;
-  try { [db, dl] = await Promise.all([cl.use('db'), cl.use('downloads')]); } catch (e) { console.error(e); }
-  S.dl = dl;
+  let db = null, dl = null, fl = null;
+  try { [db, dl, fl] = await Promise.all([cl.use('db'), cl.use('downloads'), cl.use('files').catch(() => null)]); } catch (e) { console.error(e); }
+  S.dl = dl; S.files = fl;
   if (!db) { S.ready = true; render(); return; }
   S.db = db;
   if (window.SB) window.SB.email().then(e => { S.email = e; render(); });
