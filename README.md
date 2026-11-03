@@ -1,2 +1,19 @@
-# natisabrotas
-conf natisa
+# Controle de Licitações · Natisa e José Renato
+
+Sistema web (Painel, Editais, Agenda semanal, Clientes, Cidades, Custos e orçamento).
+Hospedado no GitHub Pages; os dados ficam no Supabase e só aparecem depois do login (e-mail e senha).
+
+## Como funciona
+- `index.html`: o sistema inteiro (uma página só).
+- `config.js`: endereço (Project URL) e chave **anon** do Supabase. Essa chave é pública por natureza; a proteção dos dados vem do login e das regras do banco (`supabase/setup.sql`).
+- `vendor/`: biblioteca supabase-js (cópia local, sem depender de CDN).
+- `supabase/setup.sql`: cria a tabela, as regras de acesso e o tempo real.
+
+## Configuração (uma vez)
+1. Supabase → SQL Editor → colar `supabase/setup.sql` → Run.
+2. Authentication → Sign In / Providers → Email: **desligar "Allow new users to sign up"** (ninguém de fora cria conta).
+3. Authentication → Users → Add user → Create new user (e-mail + senha, marcar auto-confirm): um para cada pessoa que vai usar.
+4. Project Settings → API: copiar **Project URL** e a chave **anon / publishable** para `config.js`.
+5. GitHub → Settings → Pages → Source: *Deploy from a branch* → `main` / `(root)`.
+
+Nunca coloque a chave `service_role` neste repositório.
