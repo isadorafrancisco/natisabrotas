@@ -178,6 +178,7 @@ tr.open .caret{transform:rotate(90deg)}
 .kpi-v.ok{color:var(--ok)} .kpi-v.bad{color:var(--bad)} .kpi-v.warn{color:var(--warn)}
 b.neg{color:var(--bad)}
 .drop{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;border:2px dashed var(--line-strong);border-radius:16px;padding:24px 16px;background:var(--surface-2);cursor:pointer;color:var(--muted)}
+.imp-map{margin:0 0 4px}.imp-map summary{cursor:pointer;font-size:13px;color:var(--muted);padding:4px 0}.imp-tb td,.imp-tb th{white-space:nowrap}.imp-tb td.clip{max-width:260px;overflow:hidden;text-overflow:ellipsis}
 .drop:hover,.drop.on{border-color:var(--primary);background:var(--primary-soft)}
 .drop b{color:var(--fg)}
 .lrow .tick{margin-top:0}
@@ -878,6 +879,7 @@ function viewEditais() {
   const sub = h('p', null, cnt);
   const acts = [];
   if (S.dl) acts.push(btn('Exportar', { icon: 'download', onclick: exportEditais }));
+  if (S.db) acts.push(btn('Importar planilha', { icon: 'upload', onclick: importarEditais }));
   acts.push(btn('Novo edital', { kind: 'primary', icon: 'plus', onclick: () => editEdital(null) }));
   root.append(h('div', { class: 'ph' }, h('div', null, h('h1', null, 'Editais'), sub), h('div', { class: 'ph-act' }, acts)));
   const host = h('div', { class: 'card' });
@@ -909,7 +911,7 @@ function viewEditais() {
   function paint() {
     const l = filtered();
     cnt.textContent = l.length + (l.length === 1 ? ' edital' : ' editais') + (l.length !== S.data.editais.length ? ' de ' + S.data.editais.length : '');
-    if (!S.data.editais.length) { host.replaceChildren(emptyState('Nenhum edital ainda', 'Cadastre os editais que o Renato encontrar. Cada edital fica com uma empresa só.', btn('Novo edital', { kind: 'primary', icon: 'plus', onclick: () => editEdital(null) }))); return; }
+    if (!S.data.editais.length) { host.replaceChildren(emptyState('Nenhum edital ainda', 'Cadastre os editais que o Renato encontrar. Cada edital fica com uma empresa só.', h('div', { style: { display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' } }, btn('Importar planilha', { icon: 'upload', onclick: importarEditais }), btn('Novo edital', { kind: 'primary', icon: 'plus', onclick: () => editEdital(null) })))); return; }
     if (!l.length) { host.replaceChildren(emptyState('Nenhum edital com esses filtros', 'Mude ou limpe os filtros para ver mais.')); return; }
     const body = h('tbody');
     l.forEach(e => {
@@ -2077,6 +2079,377 @@ function tabDocs(c) {
         h('td', { class: 'r nw' }, h('div', { class: 'dact', style: { margin: 0, justifyContent: 'flex-end' } },
           btn('Abrir', { sm: true, onclick: () => abrirArquivo(a, false) }), btn('Baixar', { sm: true, icon: 'download', onclick: () => abrirArquivo(a, true) }), btn('Excluir', { sm: true, kind: 'danger', icon: 'trash', aria: 'Excluir ' + a.nome, onclick: () => excluirArquivo(a) }))))))))
       : emptyState('Nenhum documento ainda', 'Anexe o contrato assinado, a ordem de serviço, certidões, garantia, notas fiscais e o que mais precisar.')));
+}
+/* ================= IMPORTAR PLANILHA DE EDITAIS ================= */
+const CAMPOS_IMP = [
+  { k: 'numero', l: 'Número do edital', al: ['numero', 'n', 'no', 'n do edital', 'no do edital', 'numero do edital', 'edital', 'processo', 'numero do processo', 'n edital'] },
+  { k: 'dataCaptacao', l: 'Data de captação', t: 'data', al: ['data de captacao', 'captacao', 'data captacao', 'captado em', 'data de publicacao', 'publicacao', 'data da publicacao'] },
+  { k: 'fonte', l: 'Fonte', al: ['fonte', 'portal', 'origem', 'onde encontrou'] },
+  { k: 'link', l: 'Link do edital', al: ['link', 'link do edital', 'url', 'site', 'endereco'] },
+  { k: 'orgao', l: 'Órgão ou cliente', al: ['orgao', 'orgao ou cliente', 'cliente', 'prefeitura', 'orgao licitante', 'entidade', 'contratante', 'comprador', 'unidade compradora'] },
+  { k: 'cidade', l: 'Cidade', al: ['cidade', 'municipio', 'local', 'cidade do orgao'] },
+  { k: 'km', l: 'Distância (km)', t: 'num', al: ['km', 'distancia', 'distancia km', 'distancia ate brotas', 'distancia km ate brotas', 'distancia em km'] },
+  { k: 'modalidade', l: 'Modalidade', al: ['modalidade', 'tipo de licitacao', 'modalidade de licitacao'] },
+  { k: 'tipoObjeto', l: 'Tipo de objeto', al: ['tipo de objeto', 'tipo', 'categoria', 'tipo do objeto', 'segmento'] },
+  { k: 'objeto', l: 'Objeto', al: ['objeto', 'descricao', 'descricao do objeto', 'resumo', 'objeto da licitacao', 'servico'] },
+  { k: 'valorEstimado', l: 'Valor estimado', t: 'num', al: ['valor estimado', 'valor', 'valor total', 'valor de referencia', 'valor global', 'valor do edital', 'estimado', 'valor referencia'] },
+  { k: 'dataSessao', l: 'Data da sessão', t: 'data', al: ['data da sessao', 'sessao', 'data da abertura', 'abertura', 'data de abertura', 'data da disputa', 'disputa', 'data', 'data da licitacao', 'data sessao', 'data limite'] },
+  { k: 'exigencias', l: 'O que o edital exige', al: ['o que exige', 'exigencias', 'o que o edital exige', 'requisitos', 'exigencia'] },
+  { k: 'decisao', l: 'Decisão', al: ['decisao'] },
+  { k: 'motivoDecisao', l: 'Motivo da decisão', al: ['motivo da decisao', 'motivo decisao', 'motivo do descarte', 'motivo'] },
+  { k: 'empresa', l: 'Empresa responsável', al: ['empresa', 'empresa responsavel', 'nossa empresa', 'empresa participante'] },
+  { k: 'valorProposto', l: 'Valor proposto', t: 'num', al: ['valor proposto', 'nossa proposta', 'proposta', 'valor da proposta', 'valor que propusemos'] },
+  { k: 'status', l: 'Andamento', al: ['andamento', 'status', 'situacao', 'etapa'] },
+  { k: 'resultado', l: 'Resultado', al: ['resultado', 'resultado final'] },
+  { k: 'motivoResultado', l: 'Motivo do resultado', al: ['motivo do resultado', 'motivo resultado'] },
+  { k: 'empVencedora', l: 'Empresa vencedora', al: ['empresa vencedora', 'vencedor', 'vencedora', 'quem ganhou'] },
+  { k: 'valorVencedor', l: 'Valor vencedor', t: 'num', al: ['valor vencedor', 'valor do vencedor', 'valor da vencedora', 'valor vencedora'] },
+  { k: 'contatoVencedor', l: 'Contato do vencedor', al: ['contato do vencedor', 'contato vencedor', 'contato'] },
+  { k: 'obs', l: 'Observações', al: ['observacoes', 'obs', 'observacao', 'observações', 'anotacoes', 'notas'] }
+];
+const CAMPO_IMP = {}; CAMPOS_IMP.forEach(c => CAMPO_IMP[c.k] = c);
+const slug = s => norm(s).replace(/[^a-z0-9]+/g, ' ').trim();
+const slugH = s => slug(String(s == null ? '' : s).replace(/\(.*?\)/g, ''));
+const ALIAS_IMP = {}; CAMPOS_IMP.forEach(c => c.al.concat([c.l]).forEach(a => { if (!ALIAS_IMP[slug(a)]) ALIAS_IMP[slug(a)] = c.k; }));
+
+/* ---------- leitura de arquivos ---------- */
+function lerTextoCSV(buf) {
+  let t = new TextDecoder('utf-8').decode(buf);
+  if (t.indexOf('�') >= 0) t = new TextDecoder('windows-1252').decode(buf);
+  return t.replace(/^﻿/, '');
+}
+function parseCSV(t) {
+  const first = t.split(/\r?\n/).find(l => l.trim()) || '';
+  const cnt = c => (first.match(new RegExp(c === '\t' ? '\\t' : '\\' + c, 'g')) || []).length;
+  const d = [';', '\t', ','].sort((a, b) => cnt(b) - cnt(a))[0];
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (q) { if (ch === '"') { if (t[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === d) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && t[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+async function inflar(bytes) {
+  const s = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Response(s).arrayBuffer();
+}
+async function zipLer(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf), dec = new TextDecoder('utf-8');
+  let e = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65600); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error('zip');
+  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true);
+  const files = {};
+  for (let i = 0; i < n; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const met = dv.getUint16(p + 10, true), cs = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const name = dec.decode(u8.subarray(p + 46, p + 46 + nl));
+    files[name] = { met, cs, off };
+    p += 46 + nl + xl + cl;
+  }
+  const get = async name => {
+    const f = files[name]; if (!f) return null;
+    const ln = dv.getUint16(f.off + 26, true), lx = dv.getUint16(f.off + 28, true), st = f.off + 30 + ln + lx;
+    const data = u8.subarray(st, st + f.cs);
+    if (f.met === 0) return dec.decode(data);
+    if (f.met === 8) return dec.decode(await inflar(data));
+    throw new Error('zip');
+  };
+  return { get, names: Object.keys(files) };
+}
+function colIdx(ref) { const m = /^([A-Z]+)/.exec(ref || ''); if (!m) return 0; let n = 0; for (const ch of m[1]) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; }
+function serialISO(n) { const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000); return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); }
+async function lerXLSX(buf) {
+  const z = await zipLer(buf);
+  const xml = async name => { const t = await z.get(name); return t == null ? null : new DOMParser().parseFromString(t, 'application/xml'); };
+  const q = (n, tag) => Array.from(n.getElementsByTagName(tag));
+  const wb = await xml('xl/workbook.xml'); if (!wb) throw new Error('xlsx');
+  const sh = q(wb, 'sheet')[0]; if (!sh) throw new Error('xlsx');
+  const rid = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+  const rels = await xml('xl/_rels/workbook.xml.rels');
+  let target = 'worksheets/sheet1.xml';
+  if (rels) { const r = q(rels, 'Relationship').find(x => x.getAttribute('Id') === rid); if (r) target = r.getAttribute('Target'); }
+  const path = target.charAt(0) === '/' ? target.slice(1) : 'xl/' + target;
+  const sheet = await xml(path); if (!sheet) throw new Error('xlsx');
+  const ss = [], sst = await xml('xl/sharedStrings.xml');
+  if (sst) q(sst, 'si').forEach(si => ss.push(q(si, 't').filter(t => !t.parentNode || t.parentNode.localName !== 'rPh').map(t => t.textContent).join('')));
+  const dateXf = [], st = await xml('xl/styles.xml');
+  if (st) {
+    const custom = {}; q(st, 'numFmt').forEach(n => custom[n.getAttribute('numFmtId')] = n.getAttribute('formatCode') || '');
+    const xfs = st.getElementsByTagName('cellXfs')[0];
+    if (xfs) q(xfs, 'xf').forEach(x => {
+      const id = +x.getAttribute('numFmtId');
+      const f = custom[id];
+      dateXf.push((id >= 14 && id <= 22) || (id >= 45 && id <= 47) || (f != null && /[dmy]/i.test(f.replace(/"[^"]*"|\[[^\]]*\]|\\./g, '')) && !/^general$/i.test(f)));
+    });
+  }
+  const rows = [];
+  q(sheet, 'row').forEach(r => {
+    const ri = +r.getAttribute('r') - 1, out = [];
+    q(r, 'c').forEach(c => {
+      const ci = colIdx(c.getAttribute('r')), t = c.getAttribute('t'), vEl = c.getElementsByTagName('v')[0];
+      let v = '';
+      if (t === 'inlineStr') v = q(c, 't').map(x => x.textContent).join('');
+      else if (vEl) {
+        const raw = vEl.textContent;
+        if (t === 's') v = ss[+raw] || '';
+        else if (t === 'str' || t === 'e') v = raw;
+        else if (t === 'b') v = raw === '1' ? 'Sim' : 'Não';
+        else { const num = parseFloat(raw); v = isFinite(num) ? (dateXf[+c.getAttribute('s')] ? serialISO(num) : num) : raw; }
+      }
+      out[ci] = v;
+    });
+    rows[isFinite(ri) ? ri : rows.length] = out;
+  });
+  return Array.from(rows, r => Array.from(r || [], v => v == null ? '' : v));
+}
+async function lerPlanilha(file) {
+  const buf = await file.arrayBuffer(), nome = (file.name || '').toLowerCase();
+  const u8 = new Uint8Array(buf.slice(0, 4));
+  const ehZip = u8[0] === 0x50 && u8[1] === 0x4b;
+  if (nome.endsWith('.xlsx') || nome.endsWith('.xlsm') || ehZip) {
+    if (typeof DecompressionStream === 'undefined') throw new Error('Este navegador não consegue abrir .xlsx. Salve a planilha como CSV e tente de novo.');
+    return lerXLSX(buf);
+  }
+  if (nome.endsWith('.xls') && !ehZip) throw new Error('Arquivo .xls antigo. No Excel use Salvar como e escolha .xlsx ou CSV.');
+  return parseCSV(lerTextoCSV(buf));
+}
+
+/* ---------- conversão de valores ---------- */
+function numBR(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let s = String(v == null ? '' : v).replace(/R\$|\s| /g, '');
+  if (!s) return null;
+  s = s.replace(/[^0-9.,\-]/g, '');
+  if (!/\d/.test(s)) return NaN;
+  const d = s.lastIndexOf(','), p = s.lastIndexOf('.');
+  if (d >= 0 && p >= 0) s = d > p ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  else if (d >= 0) s = s.replace(/\./g, '').replace(',', '.');
+  else if (p >= 0 && /^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  const n = parseFloat(s);
+  return isFinite(n) ? n : NaN;
+}
+function dataBR(v) {
+  if (typeof v === 'number') return v > 20000 && v < 80000 ? serialISO(v) : NaN;
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s), a, b, c;
+  if (m) { a = +m[1]; b = +m[2]; c = +m[3]; }
+  else if ((m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/.exec(s))) { c = +m[1]; b = +m[2]; a = +m[3]; if (a < 100) a += 2000; }
+  else if (/^\d{5}(\.\d+)?$/.test(s)) return dataBR(parseFloat(s));
+  else return NaN;
+  const d = new Date(a, b - 1, c);
+  if (d.getFullYear() !== a || d.getMonth() !== b - 1 || d.getDate() !== c || a < 2000 || a > 2100) return NaN;
+  return a + '-' + pad(b) + '-' + pad(c);
+}
+function acharLista(list, v, extra) {
+  const n = slug(v); if (!n) return '';
+  const hit = list.find(x => slug(x) === n) || (extra && extra[n]);
+  if (hit) return hit;
+  if (n.length >= 4) return list.find(x => slug(x).indexOf(n) === 0) || list.find(x => slug(x).indexOf(n) >= 0) || '';
+  return '';
+}
+const SIN_RESULTADO = { 'ganhou': 'Atendido (ganhou)', 'ganho': 'Atendido (ganhou)', 'vencemos': 'Atendido (ganhou)', 'vencido': 'Atendido (ganhou)', 'atendido': 'Atendido (ganhou)', 'venceu': 'Atendido (ganhou)', 'perdeu': 'Perdido', 'perdemos': 'Perdido', 'cancelado': 'Suspenso ou cancelado', 'suspenso': 'Suspenso ou cancelado', 'cancelada': 'Suspenso ou cancelado', 'suspensa': 'Suspenso ou cancelado', 'desclassificada': 'Desclassificado' };
+const SIN_EMP = { 'natisa': 'Natisa', 'natisa prestacao de servicos': 'Natisa', 'jose renato': 'José Renato', 'renato': 'José Renato', 'jose renato de francisco': 'José Renato', 'jose renato de francisco me': 'José Renato', 'nenhuma': 'Nenhuma' };
+const SIN_DEC = { 'participar': 'Participar', 'sim': 'Participar', 'vamos participar': 'Participar', 'descartar': 'Descartar', 'descartado': 'Descartar', 'nao': 'Descartar', 'acompanhar': 'Acompanhar', 'em analise': 'Em análise', 'analise': 'Em análise' };
+
+function chaveEdital(e) { return e.numero ? 'n|' + slug(e.numero) + '|' + slug(e.orgao) : 'o|' + slug(e.orgao) + '|' + slug(e.objeto) + '|' + (e.dataSessao || ''); }
+
+/* Converte uma linha da planilha em edital + avisos/erros */
+function montarEdital(raw) {
+  const w = [], er = [], e = {};
+  const txt = k => raw[k] == null ? '' : String(raw[k]).trim();
+  const obsExtra = [];
+  e.numero = txt('numero'); e.link = txt('link'); e.orgao = txt('orgao'); e.cidade = txt('cidade'); e.objeto = txt('objeto');
+  e.exigencias = txt('exigencias'); e.empVencedora = txt('empVencedora'); e.contatoVencedor = txt('contatoVencedor'); e.obs = txt('obs');
+  CAMPOS_IMP.filter(c => c.t === 'num').forEach(c => {
+    const n = numBR(raw[c.k]);
+    if (n !== null && Number.isNaN(n)) { w.push(c.l + ' não entendido ("' + txt(c.k) + '")'); e[c.k] = null; } else e[c.k] = n;
+    if (e[c.k] != null && e[c.k] < 0) { w.push(c.l + ' negativo ignorado'); e[c.k] = null; }
+  });
+  CAMPOS_IMP.filter(c => c.t === 'data').forEach(c => {
+    const d = dataBR(raw[c.k]);
+    if (typeof d === 'number' && Number.isNaN(d)) { w.push(c.l + ' não entendida ("' + txt(c.k) + '")'); e[c.k] = ''; } else e[c.k] = d;
+  });
+  const lista = (k, list, outro, rot) => {
+    const v = txt(k); if (!v) return '';
+    const r = acharLista(list, v); if (r) return r;
+    if (outro) { obsExtra.push(rot + ' (planilha): ' + v); return outro; }
+    return '';
+  };
+  e.fonte = lista('fonte', FONTES, 'Outra', 'Fonte');
+  e.modalidade = lista('modalidade', MODALIDADES, 'Outra', 'Modalidade');
+  e.tipoObjeto = lista('tipoObjeto', TIPOS_OBJETO, 'Outro', 'Tipo de objeto');
+  e.motivoDecisao = lista('motivoDecisao', MOTIVOS_DECISAO, 'Outro', 'Motivo da decisão');
+  e.motivoResultado = lista('motivoResultado', MOTIVOS_RESULTADO, 'Outro', 'Motivo do resultado');
+  const dec = txt('decisao'); e.decisao = dec ? (acharLista(DECISOES, dec, SIN_DEC) || 'Em análise') : 'Em análise';
+  if (dec && !acharLista(DECISOES, dec, SIN_DEC)) w.push('Decisão não reconhecida ("' + dec + '"): ficou Em análise');
+  const emp = txt('empresa'); e.empresa = emp ? (acharLista(['Natisa', 'José Renato', 'Nenhuma'], emp, SIN_EMP) || '') : '';
+  if (emp && !e.empresa) w.push('Empresa não reconhecida ("' + emp + '")');
+  const res = txt('resultado'); e.resultado = res ? (acharLista(RESULTADOS, res, SIN_RESULTADO) || '') : '';
+  if (res && !e.resultado) w.push('Resultado não reconhecido ("' + res + '")');
+  const stt = txt('status'); let st = stt ? acharLista(STATUS_EDITAL, stt) : '';
+  if (stt && !st) w.push('Andamento não reconhecido ("' + stt + '")');
+  if (!e.dataCaptacao) e.dataCaptacao = todayISO();
+  if (e.link && !isUrl(e.link)) { if (/^www\./i.test(e.link)) e.link = 'https://' + e.link; }
+  if (!e.empresa && e.tipoObjeto && SUGESTAO_EMP[e.tipoObjeto] && (e.decisao === 'Participar' || e.resultado)) { e.empresa = SUGESTAO_EMP[e.tipoObjeto]; w.push('Empresa sugerida pelo tipo de objeto: ' + e.empresa); }
+  if (e.decisao === 'Descartar' && !e.motivoDecisao) { e.motivoDecisao = 'Outro'; w.push('Descartado sem motivo: ficou "Outro"'); }
+  if (e.decisao === 'Participar' && (!e.empresa || e.empresa === 'Nenhuma')) { e.decisao = 'Em análise'; w.push('Participar sem empresa: ficou Em análise'); }
+  if ((e.resultado === 'Perdido' || e.resultado === 'Desclassificado') && !e.motivoResultado) { e.motivoResultado = 'Outro'; w.push('Perdido sem motivo: ficou "Outro"'); }
+  if (e.resultado) st = 'Encerrado';
+  else if (!st) st = e.decisao === 'Descartar' ? 'Encerrado' : e.decisao === 'Participar' ? 'Proposta em preparação' : 'Captado';
+  e.status = st;
+  if (obsExtra.length) e.obs = (e.obs ? e.obs + '\n' : '') + obsExtra.join('\n');
+  if (!e.orgao) er.push('Falta o órgão');
+  if (!e.objeto) er.push('Falta o objeto');
+  return { e, w, er };
+}
+
+function detectarCabecalho(rows) {
+  let best = { i: 0, n: 0 };
+  rows.slice(0, 15).forEach((r, i) => { const n = r.filter(c => ALIAS_IMP[slugH(c)]).length; if (n > best.n) best = { i, n }; });
+  return best.n >= 2 ? best.i : -1;
+}
+
+/* ---------- tela de importação ---------- */
+function importarEditais() {
+  const st = { rows: null, head: -1, map: [], sel: new Set(), nome: '', busy: false, mapOpen: false };
+  const host = h('div');
+  const foot = h('div', { style: { display: 'contents' } });
+  let btnImp;
+
+  function modelo() {
+    if (window.SB) { const a = h('a', { href: 'modelo-editais.xlsx', download: 'modelo-editais.xlsx' }); document.body.append(a); a.click(); a.remove(); return; }
+    exportCSV('modelo-editais.csv', CAMPOS_IMP.map(c => c.l), []);
+  }
+
+  async function escolher(file) {
+    if (!file) return;
+    host.replaceChildren(h('p', { class: 'cell-s', style: { padding: '24px 0', textAlign: 'center' } }, 'Lendo a planilha…'));
+    try {
+      const rows = (await lerPlanilha(file)).filter(r => r.some(c => String(c == null ? '' : c).trim() !== ''));
+      if (!rows.length) throw new Error('A planilha está vazia.');
+      const hi = detectarCabecalho(rows);
+      if (hi < 0) throw new Error('Não encontrei a linha de títulos (Órgão, Objeto, Valor…). Confira se a primeira linha tem os nomes das colunas ou baixe o modelo.');
+      st.rows = rows; st.head = hi; st.nome = file.name;
+      const used = new Set();
+      st.map = rows[hi].map(c => { const k = ALIAS_IMP[slugH(c)]; if (k && !used.has(k)) { used.add(k); return k; } return ''; });
+      paint(true);
+    } catch (err) { st.rows = null; paint(); toast(err && err.message ? err.message : 'Não consegui ler este arquivo.', 'bad'); }
+  }
+
+  function calcular() {
+    const dados = st.rows.slice(st.head + 1);
+    const existentes = new Set(S.data.editais.map(chaveEdital));
+    const vistos = new Set();
+    return dados.map((r, i) => {
+      const raw = {}; st.map.forEach((k, ci) => { if (k && raw[k] == null) raw[k] = r[ci]; });
+      const m = montarEdital(raw); m.linha = st.head + i + 2;
+      m.dup = null;
+      if (!m.er.length) {
+        const k = chaveEdital(m.e);
+        if (existentes.has(k)) m.dup = 'Já existe no sistema';
+        else if (vistos.has(k)) m.dup = 'Repetido na planilha';
+        vistos.add(k);
+      }
+      return m;
+    });
+  }
+
+  let itens = [];
+  function paint(recalc) {
+    if (!st.rows) {
+      const inpF = h('input', { type: 'file', accept: '.xlsx,.xlsm,.csv,.txt,text/csv', hidden: true, onchange: ev => escolher(ev.target.files[0]) });
+      const drop = h('label', { class: 'drop', tabindex: '0' }, icon('upload', 22), h('b', null, 'Arraste a planilha aqui ou clique para escolher'), h('span', { class: 'cell-s' }, 'Excel (.xlsx) ou CSV. A primeira linha deve ter os títulos das colunas.'), inpF);
+      ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, ev => { ev.preventDefault(); drop.classList.add('on'); }));
+      ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, ev => { ev.preventDefault(); drop.classList.remove('on'); }));
+      drop.addEventListener('drop', ev => { if (ev.dataTransfer && ev.dataTransfer.files.length) escolher(ev.dataTransfer.files[0]); });
+      drop.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); inpF.click(); } });
+      host.replaceChildren(
+        h('p', { class: 'cell-s', style: { marginTop: 0 } }, 'Os títulos das colunas são reconhecidos pelo nome (Órgão, Objeto, Valor estimado, Data da sessão…). Antes de gravar você confere tudo numa prévia.'),
+        drop,
+        h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '14px', flexWrap: 'wrap' } }, btn('Baixar planilha modelo', { icon: 'download', sm: true, onclick: modelo }),
+          h('span', { class: 'cell-s' }, 'Já traz as colunas certas e listas de opções.')));
+      foot.replaceChildren(h('button', { class: 'btn', type: 'button', onclick: closeModal }, 'Cancelar'));
+      return;
+    }
+    if (recalc !== false) { itens = calcular(); st.sel = new Set(itens.map((m, i) => (!m.er.length && !m.dup) ? i : -1).filter(i => i >= 0)); }
+    const nOk = itens.filter(m => !m.er.length && !m.dup).length, nDup = itens.filter(m => m.dup).length, nErr = itens.filter(m => m.er.length).length;
+    const reconhecidas = st.map.filter(Boolean).length;
+    const mapa = h('details', { class: 'imp-map', open: st.mapOpen, ontoggle: ev => { st.mapOpen = ev.target.open; } }, h('summary', null, 'Colunas reconhecidas: ' + reconhecidas + ' de ' + st.rows[st.head].filter(c => String(c).trim()).length + ' (clique para conferir ou ajustar)'),
+      h('div', { class: 'tbl-wrap' }, h('table', null, h('thead', null, h('tr', null, h('th', null, 'Coluna da planilha'), h('th', null, 'Exemplo'), h('th', null, 'Vai para o campo'))),
+        h('tbody', null, st.rows[st.head].map((c, ci) => String(c).trim() ? h('tr', null, h('td', { class: 'nw' }, String(c)), h('td', { class: 'cell-s clip' }, String((st.rows[st.head + 1] || [])[ci] ?? '').slice(0, 40)),
+          h('td', null, (() => { const s = sel(CAMPOS_IMP.map(x => ({ v: x.k, l: x.l })), st.map[ci], 'Ignorar', { onchange: ev => { st.map = st.map.map((k, j) => j !== ci && k && k === ev.target.value ? '' : k); st.map[ci] = ev.target.value; paint(true); } }); return s; })())) : null)))));
+    const tb = h('tbody');
+    itens.forEach((m, i) => {
+      const bloqueado = m.er.length > 0;
+      const cb = h('input', { type: 'checkbox', checked: st.sel.has(i), disabled: bloqueado, 'aria-label': 'Importar linha ' + m.linha, onchange: ev => { ev.target.checked ? st.sel.add(i) : st.sel.delete(i); atualizaBtn(); } });
+      tb.append(h('tr', null,
+        h('td', null, cb), h('td', { class: 'cell-s' }, m.linha),
+        h('td', null, bloqueado ? pill('Erro', 'bad', m.er.join(', ')) : m.dup ? pill(m.dup, 'warn') : pill('Novo', 'ok'),
+          bloqueado ? h('div', { class: 'cell-s' }, m.er.join(', ')) : null,
+          !bloqueado && m.w.length ? h('div', { class: 'cell-s', title: m.w.join('\n') }, m.w.length === 1 ? m.w[0] : m.w.length + ' avisos: ' + m.w[0]) : null),
+        h('td', null, h('div', { class: 'cell-t' }, m.e.orgao || '—'), h('div', { class: 'cell-s' }, [m.e.cidade, m.e.numero].filter(Boolean).join(' · '))),
+        h('td', { class: 'clip' }, m.e.objeto || '—'),
+        h('td', { class: 'r' }, brl(m.e.valorEstimado)),
+        h('td', null, fmtD(m.e.dataSessao)),
+        h('td', null, m.e.empresa || '—'),
+        h('td', null, m.e.resultado || m.e.decisao)));
+    });
+    host.replaceChildren(
+      h('div', { class: 'note', style: { marginBottom: '12px' } }, h('b', null, st.nome), ' · ' + itens.length + ' linhas: ', h('b', null, nOk + ' novas'), nDup ? ', ' + nDup + ' já existentes ou repetidas (desmarcadas)' : '', nErr ? ', ' + nErr + ' com erro (não entram)' : '', '.'),
+      mapa,
+      h('div', { class: 'tbl-wrap', style: { maxHeight: '46vh', overflowY: 'auto', marginTop: '10px' } }, h('table', { class: 'imp-tb' }, h('thead', null, h('tr', null,
+        h('th', null, h('input', { type: 'checkbox', checked: nOk > 0 && st.sel.size === nOk, 'aria-label': 'Marcar todas', onchange: ev => { st.sel = new Set(ev.target.checked ? itens.map((m, i) => (!m.er.length && !m.dup) ? i : -1).filter(i => i >= 0) : []); paint(false); } })),
+        ['Linha', 'Situação', 'Órgão', 'Objeto', 'Valor', 'Sessão', 'Empresa', 'Decisão/resultado'].map((t, i) => h('th', { class: i === 4 ? 'r' : '' }, t)))), tb)),
+      itens.some(m => m.dup) ? h('p', { class: 'cell-s', style: { marginTop: '10px' } }, 'Para importar de novo uma linha já existente, marque a caixa dela: ela entra como um edital novo.') : null);
+    btnImp = h('button', { class: 'btn primary', type: 'button', onclick: gravar }, '');
+    foot.replaceChildren(
+      h('button', { class: 'btn sp', type: 'button', onclick: () => { st.rows = null; paint(); } }, 'Escolher outra planilha'),
+      h('button', { class: 'btn', type: 'button', onclick: closeModal }, 'Cancelar'), btnImp);
+    atualizaBtn();
+  }
+  function atualizaBtn() { if (!btnImp) return; const n = st.sel.size; btnImp.textContent = n ? 'Importar ' + n + (n === 1 ? ' edital' : ' editais') : 'Nada marcado'; btnImp.disabled = !n || st.busy; }
+
+  async function gravar() {
+    if (st.busy || !st.sel.size) return;
+    st.busy = true; atualizaBtn();
+    const lista = Array.from(st.sel).sort((a, b) => a - b).map(i => itens[i]);
+    let feitos = 0, falhas = 0;
+    try {
+      // cadastros automáticos (cidade e órgão), sem duplicar dentro da mesma importação
+      const cidIds = new Set(S.data.cidades.map(c => norm(c.nome)));
+      const cliMap = {}; S.data.clientes.filter(c => c.tipo === 'Órgão público').forEach(c => { cliMap[norm(c.nome)] = c.id; });
+      for (const m of lista) {
+        const e = m.e;
+        if (e.cidade) {
+          const cid = findCidade(e.cidade);
+          if (cid) { if (e.km == null && cid.km != null) e.km = cid.km; }
+          else if (e.km != null && !cidIds.has(norm(e.cidade))) { await dbSave('cidades', null, { nome: e.cidade, km: e.km }); cidIds.add(norm(e.cidade)); }
+        }
+        const k = norm(e.orgao);
+        if (!cliMap[k]) cliMap[k] = await dbSave('clientes', null, { nome: e.orgao, tipo: 'Órgão público', cidade: e.cidade, km: e.km, status: 'Monitorando', empresa: '', abordagens: [], criadoEm: Date.now() });
+        e.clienteId = cliMap[k];
+      }
+      for (let i = 0; i < lista.length; i += 8) {
+        await Promise.all(lista.slice(i, i + 8).map(async m => {
+          try { await dbSave('editais', null, Object.assign({}, m.e, { criadoEm: Date.now(), atualizadoEm: Date.now() })); feitos++; } catch (er) { falhas++; }
+        }));
+        btnImp.textContent = 'Importando… ' + Math.min(i + 8, lista.length) + ' de ' + lista.length;
+      }
+    } catch (er) { falhas = lista.length - feitos; }
+    st.busy = false;
+    if (falhas) { toast(feitos + ' importados e ' + falhas + ' com falha. Tente importar de novo as que faltam.', 'bad'); atualizaBtn(); return; }
+    closeModal(); toast(feitos + (feitos === 1 ? ' edital importado' : ' editais importados'));
+  }
+
+  openModal({ title: 'Importar planilha de editais', size: 'lg', body: host, footer: foot, focus: false });
+  paint();
 }
 /* ================= shell, rotas e inicialização ================= */
 const ROUTES = { painel: viewPainel, editais: viewEditais, agenda: viewAgenda, clientes: viewClientes, cidades: viewCidades, custos: viewCustos, fechamento: viewFechamento };
