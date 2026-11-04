@@ -6,7 +6,8 @@ Hospedado no GitHub Pages; os dados ficam no Supabase e só aparecem depois do l
 ## Como funciona
 - `index.html`: o sistema inteiro (uma página só).
 - `config.js`: endereço (Project URL) e chave **anon** do Supabase. Essa chave é pública por natureza; a proteção dos dados vem do login e das regras do banco (`supabase/setup.sql`).
-- `vendor/`: biblioteca supabase-js (cópia local, sem depender de CDN).
+- `vendor/`: bibliotecas supabase-js e Chart.js 4.4.1 (cópias locais, sem depender de CDN).
+- Tela **Controle de gastos** (`#controle`): contrato de roçada, produção em m², máquinas, gasto total e calendário de contas. Usa a mesma tabela `docs` (coleções `abastecimentos`, `oficina`, `producao`, `contas` e `config/controle`), então não precisa rodar nenhum SQL novo. Funcionários vêm de Custos e orçamento > Equipe.
 - `supabase/setup.sql`: cria a tabela, as regras de acesso e o tempo real.
 - `supabase/storage.sql`: cria a área privada de arquivos (`contratos`) usada pelos documentos da tela Fechamento.
 
