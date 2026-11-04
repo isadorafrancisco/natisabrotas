@@ -1445,11 +1445,24 @@ function funcCusto(f) {
   const total = base + enc + (+f.alimTransp || 0) + (+f.epi || 0);
   return { base: base, enc: enc, total: total, hora: total / (p.dias * p.horas) };
 }
+/* Gastos reais dos últimos 90 dias (lançados no Controle de gastos), em média por mês. Sem lançamentos: null. */
+function equipReal(e) {
+  const n = norm(e.nome), td = todayISO(), ini = addDays(td, -90);
+  const f = S.data.abastecimentos.filter(x => norm(x.maquina) === n && x.data >= ini && x.data <= td);
+  const o = S.data.oficina.filter(x => norm(x.maquina) === n && x.data >= ini && x.data <= td);
+  const all = f.concat(o); if (!all.length) return null;
+  const first = all.reduce((m, x) => x.data < m ? x.data : m, td);
+  const meses = Math.min(3, Math.max(1, (diffDays(td, first) + 1) / 30));
+  return { comb: sum(f, x => x.valor) / meses, ofi: sum(o, x => x.valor) / meses, litros: sum(f, x => x.litros) / meses, meses: meses };
+}
 function equipCusto(e) {
   const res = e.residual == null ? 0.1 : e.residual;
   const dep = e.vidaUtil > 0 ? (+e.valorCompra || 0) * (1 - res) / e.vidaUtil : 0;
-  const mensal = dep + (+e.manutencao || 0) + (+e.combustivel || 0) + (+e.seguro || 0);
-  return { dep: dep, mensal: mensal, hora: e.horasUso > 0 ? mensal / e.horasUso : null };
+  const real = equipReal(e);
+  const comb = real && real.comb > 0 ? real.comb : (+e.combustivel || 0);
+  const manut = real && real.ofi > 0 ? real.ofi : (+e.manutencao || 0);
+  const mensal = dep + manut + comb + (+e.seguro || 0);
+  return { dep: dep, mensal: mensal, hora: e.horasUso > 0 ? mensal / e.horasUso : null, real: real, comb: comb, manut: manut, combReal: !!(real && real.comb > 0), manutReal: !!(real && real.ofi > 0) };
 }
 const empPill = e => e === 'Compartilhado' ? pill('Compartilhado', 'info') : pill(e || '—', empKind(e));
 const SPEC_FUNC = {
@@ -1470,10 +1483,11 @@ const SPEC_EQUIP = {
   fields: [{ k: 'nome', label: 'Item *', type: 'text', req: true }, { k: 'empresa', label: 'Empresa', type: 'select', opts: EMP_CUSTO, blank: undefined },
     { k: 'valorCompra', label: 'Valor de compra (R$)', type: 'number' }, { k: 'vidaUtil', label: 'Vida útil (meses)', type: 'number' },
     { k: 'residual', label: 'Valor residual (%)', type: 'pct' }, { k: 'horasUso', label: 'Horas de uso por mês', type: 'number', hint: 'Para calcular o custo por hora' },
-    { k: 'manutencao', label: 'Manutenção (R$ por mês)', type: 'number' }, { k: 'combustivel', label: 'Combustível (R$ por mês)', type: 'number' },
-    { k: 'seguro', label: 'Seguro, IPVA e licenciamento (R$ por mês)', type: 'number' }],
+    { k: 'manutencao', label: 'Manutenção (R$ por mês)', type: 'number', hint: 'Estimativa. Com notas de oficina lançadas, vale a média real dos últimos 90 dias.' }, { k: 'combustivel', label: 'Combustível (R$ por mês)', type: 'number', hint: 'Estimativa. Com abastecimentos lançados, vale a média real dos últimos 90 dias.' },
+    { k: 'seguro', label: 'Seguro, IPVA e licenciamento (R$ por mês)', type: 'number' },
+    { k: 'tipoComb', label: 'Combustível da máquina', type: 'select', opts: ['Gasolina', 'Diesel', 'Mistura (gasolina + óleo 2T)', 'Elétrica', 'Outro'], blank: 'Não aparece no Controle de gastos', hint: 'Escolha para a máquina aparecer em Lançar e Máquinas, no Controle de gastos.' }],
   cols: [{ h: 'Item', f: r => [h('span', { class: 'cell-t' }, r.nome), exTag(r)] }, { h: 'Empresa', f: r => empPill(r.empresa) }, { h: 'Valor de compra', r: true, f: r => brl(r.valorCompra, true) },
-    { h: 'Custo mensal', r: true, f: r => brl(equipCusto(r).mensal, true) }, { h: 'Horas por mês', r: true, f: r => r.horasUso || '—' }, { h: 'Custo por hora', r: true, f: r => brl(equipCusto(r).hora, true) }],
+    { h: 'Custo mensal', r: true, f: r => { const c = equipCusto(r); return [brl(c.mensal, true), c.combReal || c.manutReal ? h('div', { class: 'cell-s', title: 'Combustível e/ou oficina vêm da média dos últimos 90 dias lançados no Controle de gastos' }, 'com gastos reais') : null]; } }, { h: 'Horas por mês', r: true, f: r => r.horasUso || '—' }, { h: 'Custo por hora', r: true, f: r => brl(equipCusto(r).hora, true) }],
   footer: rows => h('tr', null, h('td', { colspan: 3, style: { fontWeight: 700 } }, 'Total mensal dos equipamentos'), h('td', { class: 'r', style: { fontWeight: 700 } }, brl(sum(rows, r => equipCusto(r).mensal), true)), h('td'), h('td'))
 };
 const SPEC_FIXOS = {
@@ -2483,7 +2497,9 @@ const viewControle = (function () {
   const HOLERITES = [
     ['Milton Ishimaru', 1794.10], ['Aguinaldo Luiz Ishimaru', 2242.28], ['Claiton José Gennari', 1794.10], ['Johny Wellington dos Santos', 1794.10],
     ['Valmir Rosa Prado', 1794.10], ['Sidnei Aparecido Guanho', 1752.34], ['Michael Marcos de Oliveira Rando', 1794.10]];
-  const getCfg = () => Object.assign({}, DEF, S.ctl || {});
+  const maqEquip = () => S.data.equipamentos.filter(e => e.nome && e.tipoComb && e.empresa !== 'José Renato').sort((a, b) => norm(a.nome).localeCompare(norm(b.nome))).map(e => ({ nome: e.nome, comb: e.tipoComb }));
+  const cfgRaw = () => Object.assign({}, DEF, S.ctl || {});
+  const getCfg = () => { const c = Object.assign({}, DEF, S.ctl || {}), m = maqEquip(); c.fromEquip = m.length > 0; if (m.length) c.maquinas = m; return c; };
   const TIPOS_OFI = ['Peça', 'Mão de obra', 'Lubrificante / óleo', 'Lâmina / fio de nylon', 'Pneu', 'Outro'];
   const TABS = [['resumo', 'Resumo'], ['contrato', 'Contrato'], ['producao', 'Produção'], ['maquinas', 'Máquinas'], ['gastos', 'Gasto total'], ['calendario', 'Calendário'], ['lanc', 'Lançamentos'], ['ajustes', 'Ajustes']];
   const DOW3 = DIAS.map(d => d.slice(0, 3));
@@ -2674,6 +2690,19 @@ const viewControle = (function () {
     } catch (e) { /* aviso já mostrado */ }
   }
 
+  async function importarMaquinas() {
+    const have = new Set(S.data.equipamentos.map(e => norm(e.nome)));
+    const novos = DEF.maquinas.filter(m => !have.has(norm(m.nome)));
+    const marcar = S.data.equipamentos.filter(e => !e.tipoComb && DEF.maquinas.some(m => norm(m.nome) === norm(e.nome)));
+    if (!novos.length && !marcar.length) { toast('As máquinas já estão cadastradas.'); return; }
+    if (!await askConfirm({ title: 'Cadastrar máquinas', text: 'Criar ' + novos.length + ' máquinas em Equipamentos e veículos (empresa Natisa) e marcar o tipo de combustível' + (marcar.length ? ' de ' + marcar.length + ' já existentes' : '') + '? Depois você completa valor de compra, horas de uso e seguro.', yes: 'Cadastrar' })) return;
+    try {
+      for (const m of novos) await dbSave('equipamentos', null, { nome: m.nome, empresa: 'Natisa', residual: 0.1, vidaUtil: 36, manutencao: 0, combustivel: 0, seguro: 0, tipoComb: m.comb, criadoEm: Date.now() });
+      for (const e of marcar) await dbUpdate('equipamentos', e.id, { tipoComb: DEF.maquinas.find(m => norm(m.nome) === norm(e.nome)).comb });
+      toast('Máquinas cadastradas em Equipamentos e veículos');
+    } catch (e) { /* aviso já mostrado */ }
+  }
+
   /* ---------- gráficos ---------- */
   const CH = {};
   function chartDraw(draws, id, make) {
@@ -2860,8 +2889,8 @@ const viewControle = (function () {
     h2 += '<section class="card"><div class="card-h"><div><h3>Funcionários</h3><p class="sub" style="margin:0">Vêm do cadastro de Custos e orçamento > Equipe (empresa Natisa ou Compartilhado). O custo vem das Premissas do sistema, mais o PPR de cada um.</p></div><div class="chips" style="margin:0"><button class="btn sm" data-a="importfunc" type="button">Importar dos holerites de julho</button><button class="btn sm primary" data-a="goequipe" type="button">Editar equipe</button></div></div><div class="scroll"><table><thead><tr><th>Nome</th><th>Empresa</th><th>Salário</th><th>PPR</th><th>% no contrato</th><th>Custo mensal</th><th>Custo semanal no contrato</th></tr></thead><tbody>' +
       (E2.length ? E2.map(x => '<tr><td>' + E(x.f.nome) + '</td><td>' + E(x.f.empresa) + '</td><td>' + R(x.sal) + '</td><td>' + R(x.ppr) + '</td><td>' + Math.round(x.pc * 100) + '%</td><td>' + R(x.custo) + '</td><td>' + R(x.semana) + '</td></tr>').join('') + '<tr class="tot"><td>Total</td><td></td><td>' + R(sum(E2, x => x.sal)) + '</td><td>' + R(sum(E2, x => x.ppr)) + '</td><td></td><td>' + R(sum(E2, x => x.custo)) + '</td><td>' + R(M.funcSem) + '</td></tr>' : '<tr><td colspan="7">' + emptyBox('Nenhum funcionário da Natisa', 'Use "Importar dos holerites de julho" ou cadastre em Custos e orçamento.') + '</td></tr>') + '</tbody></table></div>' +
       '<p class="note">O % no contrato é um campo do cadastro do funcionário. Vazio vale 100% para a Natisa e 0% para os demais. A folha líquida, o INSS e o FGTS das contas a pagar consideram só quem é da Natisa.</p></section>';
-    h2 += '<section class="grid2"><div class="card"><div class="card-h"><h3>Máquinas</h3><button class="btn sm" data-a="addarr" data-k="maquinas" type="button">+ Máquina</button></div><div class="scroll"><table><thead><tr><th>Nome</th><th>Combustível</th><th></th></tr></thead><tbody>' +
-      c.maquinas.map((x, i) => '<tr><td><input class="cell-in" style="min-width:170px" data-arr="maquinas" data-i="' + i + '" data-k="nome" value="' + E(x.nome) + '"></td><td><input class="cell-in" style="min-width:150px" data-arr="maquinas" data-i="' + i + '" data-k="comb" value="' + E(x.comb) + '"></td><td><button class="btn sm danger" data-a="rmarr" data-k="maquinas" data-i="' + i + '" type="button">Remover</button></td></tr>').join('') + '</tbody></table></div><p class="note">Renomear não altera lançamentos antigos.</p></div>' +
+    h2 += '<section class="grid2"><div class="card"><div class="card-h"><h3>Máquinas</h3>' + (c.fromEquip ? '<button class="btn sm" data-a="goequip" type="button">Editar em Equipamentos</button>' : '<button class="btn sm primary" data-a="importmaq" type="button">Cadastrar em Equipamentos</button>') + '</div><div class="scroll"><table><thead><tr><th>Nome</th><th>Combustível</th></tr></thead><tbody>' +
+      c.maquinas.map(x => '<tr><td>' + E(x.nome) + '</td><td>' + E(x.comb) + '</td></tr>').join('') + '</tbody></table></div><p class="note">' + (c.fromEquip ? 'Esta lista vem de Custos e orçamento > Equipamentos e veículos: aparece toda máquina com o campo Combustível preenchido.' : 'Lista padrão, ainda fora de Equipamentos e veículos. Clique em Cadastrar para criar essas máquinas lá (dá para ajustar valor de compra, horas e seguro) e passar a usar um cadastro só.') + '</p></div>' +
       '<div class="card"><div class="card-h"><h3>Serviços</h3><button class="btn sm" data-a="addarr" data-k="servicos" type="button">+ Serviço</button></div><div class="scroll"><table><thead><tr><th>Nome</th><th></th></tr></thead><tbody>' +
       c.servicos.map((x, i) => '<tr><td><input class="cell-in" style="min-width:170px" data-arr="servicos" data-i="' + i + '" data-k="*" value="' + E(x) + '">' + (i === 0 ? ' <span class="pill mute">principal</span>' : '') + '</td><td><button class="btn sm danger" data-a="rmarr" data-k="servicos" data-i="' + i + '" type="button">Remover</button></td></tr>').join('') + '</tbody></table></div><p class="note">O primeiro da lista é o contrato analisado em Contrato e Produção.</p></div></section>';
     h2 += '<section class="card"><h3>Contas fixas mensais</h3><p class="sub">Cada uma entra no calendário todo mês, no dia indicado. Sem dia, fica em "Falta preencher". Valor vazio usa o cálculo automático, quando houver.</p><div class="scroll"><table><thead><tr><th>Conta</th><th>Valor estimado (R$)</th><th>Dia do vencimento</th><th>Valor automático</th></tr></thead><tbody>' +
@@ -3059,9 +3088,11 @@ input:focus{border-color:var(--primary)}
       else if (a === 'demooff') { CT.demoOff = true; try { localStorage.setItem('natisa_ctl_demo_off', '1'); } catch (x) {} render(); openLancar('fuel'); }
       else if (a === 'del') { askConfirm({ title: 'Excluir lançamento', text: 'Excluir este lançamento?', yes: 'Excluir', danger: true }).then(ok => { if (ok) dbDelete(d.c, d.id).then(() => toast('Lançamento excluído')).catch(() => {}); }); }
       else if (a === 'delbill') { askConfirm({ title: 'Excluir conta', text: 'Excluir esta conta avulsa?', yes: 'Excluir', danger: true }).then(ok => { if (ok) dbDelete('contas', d.id).then(() => toast('Conta excluída')).catch(() => {}); }); }
-      else if (a === 'addarr') { const c = clone(getCfg()); if (d.k === 'maquinas') c.maquinas.push({ nome: 'Nova máquina', comb: '' }); if (d.k === 'servicos') c.servicos.push('Novo serviço'); saveCfg(c); }
-      else if (a === 'rmarr') { askConfirm({ title: 'Remover', text: 'Remover este item da lista? Lançamentos antigos continuam salvos.', yes: 'Remover', danger: true }).then(ok => { if (!ok) return; const c = clone(getCfg()); c[d.k].splice(+d.i, 1); saveCfg(c); }); }
+      else if (a === 'addarr') { const c = clone(cfgRaw()); if (d.k === 'maquinas') c.maquinas.push({ nome: 'Nova máquina', comb: '' }); if (d.k === 'servicos') c.servicos.push('Novo serviço'); saveCfg(c); }
+      else if (a === 'rmarr') { askConfirm({ title: 'Remover', text: 'Remover este item da lista? Lançamentos antigos continuam salvos.', yes: 'Remover', danger: true }).then(ok => { if (!ok) return; const c = clone(cfgRaw()); c[d.k].splice(+d.i, 1); saveCfg(c); }); }
       else if (a === 'importfunc') importarFuncionarios();
+      else if (a === 'importmaq') importarMaquinas();
+      else if (a === 'goequip') { S.ui.custosTab = 'equip'; go('custos'); }
       else if (a === 'goequipe') { S.ui.custosTab = 'equipe'; go('custos'); }
     });
     root.addEventListener('change', e => {
@@ -3070,12 +3101,12 @@ input:focus{border-color:var(--primary)}
         if (d.f === 'valor') { const raw = t.value.trim(); saveBill(M, d.bill, { valor: raw === '' ? null : num(raw) }).catch(() => {}); }
         else if (d.f === 'venc') saveBill(M, d.bill, { venc: t.value }).catch(() => {});
       } else if (d.cfg) {
-        const c = clone(getCfg()); let v = t.value;
+        const c = clone(cfgRaw()); let v = t.value;
         if (d.kind === 'num') v = num(v); else if (d.kind === 'pct') v = num(v) / 100;
         if (d.cfg === 'inicio') { if (!v) return; v = weekStart(v); }
         c[d.cfg] = v; saveCfg(c);
       } else if (d.arr) {
-        const c = clone(getCfg()), i = +d.i; let v = t.value;
+        const c = clone(cfgRaw()), i = +d.i; let v = t.value;
         if (d.kind === 'num') v = num(v); else if (d.kind === 'pct') v = num(v) / 100;
         else if (d.kind === 'numn') v = v.trim() === '' ? null : num(v);
         else if (d.kind === 'dia') { v = Math.min(28, Math.max(0, Math.round(num(v)))); if (!v) v = null; }
