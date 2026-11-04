@@ -2879,17 +2879,17 @@ const viewControle = (function () {
     const dt = inp('date', preset.date || todayISO());
     let fields;
     if (tab === 'fuel') {
-      c.data = dt; c.maquina = sel(maq, preset.maquina, maq.length ? undefined : 'Cadastre em Ajustes'); c.servico = sel(srv, preset.servico, srv.length ? undefined : 'Cadastre em Ajustes');
+      c.data = dt; c.maquina = sel(maq, preset.maquina, maq.length ? 'Escolha a máquina' : 'Cadastre em Ajustes'); c.servico = sel(srv, preset.servico || srv[0], srv.length ? undefined : 'Cadastre em Ajustes');
       c.litros = inp('number', null, { min: '0', placeholder: 'Ex.: 20' }); c.valor = inp('number', null, { min: '0', placeholder: 'Ex.: 130,00' }); c.obs = inp('text', '');
       const upd = () => { const l = +c.litros.value, v = +c.valor.value; hint.textContent = l > 0 && v > 0 ? 'Preço por litro: ' + R(v / l) : 'O preço por litro aparece aqui.'; };
       c.litros.addEventListener('input', upd); c.valor.addEventListener('input', upd); upd();
       fields = [h('div', { class: 'row2' }, fld('Data', c.data), fld('Máquina', c.maquina)), h('div', { class: 'row2' }, fld('Serviço', c.servico), fld('Litros', c.litros)), h('div', { class: 'row2' }, fld('Valor total (R$)', c.valor), fld('Posto ou observação', c.obs)), hint];
     } else if (tab === 'ofi') {
-      c.data = dt; c.maquina = sel(maq, preset.maquina, maq.length ? undefined : 'Cadastre em Ajustes'); c.servico = sel(srv, preset.servico, srv.length ? undefined : 'Cadastre em Ajustes');
+      c.data = dt; c.maquina = sel(maq, preset.maquina, maq.length ? 'Escolha a máquina' : 'Cadastre em Ajustes'); c.servico = sel(srv, preset.servico || srv[0], srv.length ? undefined : 'Cadastre em Ajustes');
       c.tipo = sel(TIPOS_OFI, 'Peça'); c.desc = inp('text', '', { placeholder: 'Ex.: troca de lâminas' }); c.valor = inp('number', null, { min: '0', placeholder: 'Ex.: 180,00' }); c.obs = inp('text', '');
       fields = [h('div', { class: 'row2' }, fld('Data', c.data), fld('Máquina', c.maquina)), h('div', { class: 'row2' }, fld('Serviço', c.servico), fld('Tipo', c.tipo)), fld('Descrição', c.desc), h('div', { class: 'row2' }, fld('Valor (R$)', c.valor), fld('Oficina ou nota', c.obs))];
     } else if (tab === 'prod') {
-      c.data = dt; c.servico = sel(srv, preset.servico, srv.length ? undefined : 'Cadastre em Ajustes'); c.maquina = sel(maq, preset.maquina, maq.length ? undefined : 'Cadastre em Ajustes');
+      c.data = dt; c.servico = sel(srv, preset.servico || srv[0], srv.length ? undefined : 'Cadastre em Ajustes'); c.maquina = sel(maq, preset.maquina, maq.length ? 'Escolha a máquina' : 'Cadastre em Ajustes');
       c.m2 = inp('number', null, { min: '0', placeholder: 'Ex.: 12000' }); c.local = inp('text', '');
       const upd = () => { const m = +c.m2.value; hint.textContent = m > 0 ? 'Receita estimada: ' + R(m * cfg.preco) + ' (' + N0(m) + ' m² × ' + R(cfg.preco) + ')' : 'Uma linha por máquina por dia. A receita estimada aparece aqui.'; };
       c.m2.addEventListener('input', upd); upd();
