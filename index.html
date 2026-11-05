@@ -2162,12 +2162,46 @@ function tabCustos(c, s) {
     consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Custos e orçamento)'),
       h('div', { class: 'bar ' + (consumo > 1 ? 'bad' : consumo > 0.85 ? 'warn' : 'ok'), style: { margin: '10px 0 6px' } }, h('i', { style: { width: Math.min(100, consumo * 100) + '%' } })),
       h('div', { class: 'cell-s' }, brl(s.custoReal) + ' de ' + brl(s.custoOrc) + (consumo > 1 ? ': passou do orçado' : ''))) : null,
+    secMaquinas(c),
     cats.length ? h('div', { class: 'grid g-2', style: { marginTop: '16px' } },
       h('div', { class: 'card card-p' }, h('h3', null, 'Por categoria'), barList(cats, cats[0][1], '', v => brl(v))),
       h('div', { class: 'card card-p' }, h('h3', null, 'Por mês'), barList(meses, Math.max.apply(null, meses.map(x => x[1])), 'warn', v => brl(v)))) : null,
     h('div', { class: 'card', style: { marginTop: '16px' } },
       h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Custos lançados'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), btn('Novo custo', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specGasto(c), null) })),
       crudTable(spec, rows)));
+}
+
+function secMaquinas(c) {
+  const api = window.CTL_API; if (!api) return null;
+  const M = api.maquinas(c.id);
+  const per = api.period();
+  const chips = [['sem', 'Esta semana'], ['30', 'Últimos 30 dias'], ['all', 'Tudo']].map(p => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(per === p[0]), onclick: () => { api.setPeriod(p[0]); render(); } }, p[1]));
+  const acts = M ? [btn('Abastecimento', { icon: 'plus', sm: true, kind: 'primary', onclick: () => api.lancar('fuel', c.id) }), btn('Oficina', { icon: 'plus', sm: true, onclick: () => api.lancar('ofi', c.id) }), btn('Área roçada', { icon: 'plus', sm: true, onclick: () => api.lancar('prod', c.id) })] : [];
+  const head = h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } },
+    h('div', null, h('h3', null, 'Máquinas deste contrato'), h('p', { class: 'sub' }, 'Combustível e oficina de cada máquina neste contrato. A folha não entra aqui. Os lançamentos também aparecem no Controle de gastos.')),
+    h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, acts));
+  let body;
+  if (!M) body = h('div', { class: 'card-p' }, h('p', { class: 'cell-s' }, 'As máquinas aparecem quando o contrato está "Em execução". Mude a situação em Dados do contrato para ver e lançar aqui.'));
+  else if (M.demo) body = emptyState('Nenhum lançamento de máquinas ainda', 'Lance abastecimentos, oficina e a área roçada deste contrato. Os cartões de cada máquina aparecem aqui.');
+  else {
+    const mq = M.machines.slice().sort((a, b) => b.total - a.total);
+    const avisos = M.alerts.filter(a => /^(Semana atual|Semana passada|Nenhuma produção)/.test(a.x));
+    const T = { comb: sum(mq, m => m.combR), ofi: sum(mq, m => m.ofiR), lit: sum(mq, m => m.litros), m2: sum(mq, m => m.m2) };
+    const mx = Math.max(1, ...mq.map(m => m.total));
+    body = h('div', { class: 'card-p', style: { paddingTop: 0 } },
+      h('div', { class: 'chips', style: { marginBottom: '12px' } }, chips),
+      h('p', { class: 'cell-s', style: { margin: '0 0 12px' } }, 'No período: combustível ' + brl(T.comb, true) + ' · oficina ' + brl(T.ofi, true) + ' · ' + fmtN(T.lit, 1) + ' L · ' + (T.m2 ? fmtN(T.m2, 0) + ' m² roçados' : 'sem área lançada')),
+      avisos.length ? avisos.map(a => h('div', { class: 'note', style: { marginBottom: '8px', background: a.t === 'warn' ? 'var(--warn-bg)' : '', color: a.t === 'warn' ? 'var(--warn)' : '' } }, a.x.replace(/ Confira a aba Produção\./, ''))) : null,
+      mq.length ? h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,250px),1fr))', gap: '14px' } }, mq.map(m => h('div', { class: 'card card-p' },
+        h('h3', null, m.nome), h('p', { class: 'sub', style: { margin: 0 } }, m.comb || 'Combustível não informado'),
+        h('div', { class: 'kpi-v', style: { margin: '10px 0 8px' } }, brl(m.total, true)),
+        h('div', { class: 'bar' }, h('i', { style: { width: (m.total / mx * 100) + '%' } })),
+        h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px', marginTop: '12px', fontSize: '13px' } },
+          [['Combustível', brl(m.combR, true)], ['Oficina', brl(m.ofiR, true)], ['Litros', fmtN(m.litros, 1) + ' L'], ['Preço médio', m.rl != null ? brl(m.rl, true) + '/L' : '–'], ['Área roçada', m.m2 ? fmtN(m.m2, 0) + ' m²' : '–'], ['Custo por 1.000 m²', m.t1000 != null ? brl(m.t1000, true) : '–']]
+            .map(x => h('div', null, h('div', { class: 'cell-s' }, x[0]), h('b', null, x[1])))))))
+        : h('p', { class: 'cell-s' }, 'Nenhuma máquina cadastrada. Cadastre em Controle de gastos > Ajustes.'));
+  }
+  return h('div', { class: 'card', style: { marginTop: '16px' } }, head, body);
 }
 
 /* ---------- aba Pendências e anotações ---------- */
@@ -3465,6 +3499,13 @@ input:focus{border-color:var(--primary)}
     return wrap;
   }
   try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.route === 'controle' || S.route === 'familia' || S.route === 'geral') render(); }); } catch (e) {}
+  /* Ponte para a aba Custos de cada contrato: mesmos dados e mesmo lançamento do Controle de gastos */
+  window.CTL_API = {
+    period: () => CT.period,
+    setPeriod: p => { CT.period = p; },
+    maquinas: id => { const prev = CT.contrato; CT.contrato = id; let M = null; try { M = model(); } catch (e) { console.error(e); } CT.contrato = prev; return M && M.selId === id ? M : null; },
+    lancar: (tab, id) => { CT.contrato = id; try { CT.M = model(); } catch (e) {} const x = contratosList(getCfg()).find(z => z.id === id); openLancar(tab, { servico: x && x.nome }); }
+  };
   return build;
 })();
 
