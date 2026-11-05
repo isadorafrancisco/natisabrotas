@@ -2189,7 +2189,7 @@ function tabCustos(c, s) {
       h('div', { class: 'card card-p' }, h('h3', null, 'Por categoria'), barList(cats, cats[0][1], '', v => brl(v))),
       h('div', { class: 'card card-p' }, h('h3', null, 'Por mês'), barList(meses, Math.max.apply(null, meses.map(x => x[1])), 'warn', v => brl(v)))) : null,
     h('div', { class: 'card', style: { marginTop: '16px' } },
-      h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Custos lançados'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), btn('Novo custo', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specGasto(c), null) })),
+      h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Custos lançados'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, S.db ? btn('Importar planilha', { icon: 'upload', onclick: () => importarGastos(c) }) : null, btn('Novo custo', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specGasto(c), null) }))),
       crudTable(spec, rows)));
 }
 
@@ -2693,6 +2693,166 @@ function importarEditais() {
   }
 
   openModal({ title: 'Importar planilha de editais', size: 'lg', body: host, footer: foot, focus: false });
+  paint();
+}
+/* ================= IMPORTAR GASTOS DO CONTRATO (planilha) ================= */
+/* Cada linha vira: abastecimento (combustível com máquina) ou oficina (oficina com máquina), que aparecem em Máquinas, ou custo do contrato. */
+const CAMPOS_GAS = [
+  { k: 'data', l: 'Data', al: ['data', 'dia', 'data do gasto', 'data da compra', 'data de pagamento', 'data pagamento', 'data lancamento', 'emissao', 'vencimento'] },
+  { k: 'categoria', l: 'Categoria', al: ['categoria', 'tipo de gasto', 'natureza', 'classificacao', 'grupo', 'tipo'] },
+  { k: 'descricao', l: 'Descrição', al: ['descricao', 'historico', 'detalhe', 'detalhes', 'item', 'produto', 'fornecedor', 'favorecido', 'observacao', 'observacoes', 'nome'] },
+  { k: 'valor', l: 'Valor', al: ['valor', 'total', 'valor total', 'preco', 'custo', 'valor pago', 'quanto'] },
+  { k: 'maquina', l: 'Máquina', al: ['maquina', 'equipamento', 'veiculo', 'maquina equipamento'] },
+  { k: 'litros', l: 'Litros', al: ['litros', 'litragem', 'qtd litros', 'quantidade litros', 'quantidade de litros'] },
+  { k: 'tipoOfi', l: 'Tipo de serviço (oficina)', al: ['tipo de servico', 'tipo servico', 'servico oficina', 'tipo oficina'] }];
+const ALIAS_GAS = {}; CAMPOS_GAS.forEach(c => c.al.concat([c.l]).forEach(a => { if (!ALIAS_GAS[slug(a)]) ALIAS_GAS[slug(a)] = c.k; }));
+const SIN_CAT_GAS = { 'combustivel': 'Combustível', 'combustiveis': 'Combustível', 'diesel': 'Combustível', 'gasolina': 'Combustível', 'etanol': 'Combustível', 'abastecimento': 'Combustível', 'oficina': 'Oficina e manutenção', 'manutencao': 'Oficina e manutenção', 'peca': 'Oficina e manutenção', 'pecas': 'Oficina e manutenção', 'mecanica': 'Oficina e manutenção', 'conserto': 'Oficina e manutenção', 'pneu': 'Oficina e manutenção', 'maquina': 'Máquinas e equipamentos', 'maquinas': 'Máquinas e equipamentos', 'equipamento': 'Máquinas e equipamentos', 'equipamentos': 'Máquinas e equipamentos', 'aluguel': 'Máquinas e equipamentos', 'outro': 'Outros', 'outros': 'Outros' };
+function catPorTexto(t) {
+  const s = slug(t);
+  if (/diesel|gasolina|etanol|combust|abastec|posto/.test(s)) return 'Combustível';
+  if (/oficina|manuten|peca|pneu|oleo|lamina|nylon|conserto|mecanic|reparo|filtro|correia/.test(s)) return 'Oficina e manutenção';
+  return '';
+}
+function montarGasto(raw, maqNomes) {
+  const w = [], er = [], g = {};
+  const txt = k => raw[k] == null ? '' : String(raw[k]).trim();
+  const d = dataBR(raw.data);
+  if (d === '' || d == null) er.push('Falta a data'); else if (typeof d === 'number') er.push('Data não entendida ("' + txt('data') + '")'); else g.data = d;
+  const v = numBR(raw.valor);
+  if (v === null) er.push('Falta o valor'); else if (Number.isNaN(v)) er.push('Valor não entendido ("' + txt('valor') + '")'); else if (!(v > 0)) er.push('Valor precisa ser maior que zero'); else g.valor = Math.round(v * 100) / 100;
+  g.descricao = txt('descricao');
+  const lt = numBR(raw.litros); g.litros = lt != null && !Number.isNaN(lt) && lt > 0 ? lt : 0;
+  if (lt != null && Number.isNaN(lt)) w.push('Litros não entendido ("' + txt('litros') + '")');
+  let maq = txt('maquina');
+  if (maq) { const hit = acharLista(maqNomes, maq); if (hit) maq = hit; else w.push('Máquina "' + maq + '" não está cadastrada: entra com este nome'); }
+  g.maquina = maq;
+  const ct = txt('categoria');
+  let cat = ct ? (acharLista(CATS_GASTO, ct, SIN_CAT_GAS) || ct) : (catPorTexto(g.descricao) || ((maq && g.litros) ? 'Combustível' : 'Outros'));
+  if (!ct && cat !== 'Outros') w.push('Categoria deduzida: ' + cat);
+  g.categoria = cat;
+  g.tipoOfi = acharLista(['Peça', 'Mão de obra', 'Lubrificante / óleo', 'Lâmina / fio de nylon', 'Pneu', 'Outro'], txt('tipoOfi')) || (/pneu/.test(slug(g.descricao)) ? 'Pneu' : /oleo|lubrific/.test(slug(g.descricao)) ? 'Lubrificante / óleo' : /lamina|nylon|fio/.test(slug(g.descricao)) ? 'Lâmina / fio de nylon' : /mao de obra/.test(slug(g.descricao)) ? 'Mão de obra' : /peca/.test(slug(g.descricao)) ? 'Peça' : 'Outro');
+  g.destino = cat === 'Combustível' && maq ? 'fuel' : cat === 'Oficina e manutenção' && maq ? 'ofi' : 'gasto';
+  if (g.destino === 'fuel' && !g.litros) w.push('Sem litros: entra no custo da máquina, sem consumo');
+  if ((cat === 'Combustível' || cat === 'Oficina e manutenção') && !maq) w.push('Sem máquina: entra só como custo do contrato');
+  return { g, w, er };
+}
+function chaveGasto(g) { return g.destino + '|' + g.data + '|' + g.valor + '|' + slug(g.destino === 'gasto' ? g.descricao || g.categoria : g.maquina); }
+function importarGastos(c) {
+  const api = window.CTL_API;
+  const maqNomes = api && api.nomesMaquinas ? api.nomesMaquinas() : [];
+  const servico = api && api.nome ? api.nome(c) : (c.orgao || 'Contrato');
+  const st = { rows: null, head: -1, map: [], sel: new Set(), nome: '', busy: false, mapOpen: false };
+  const host = h('div'), foot = h('div', { style: { display: 'contents' } });
+  let btnImp, itens = [];
+  const DEST = { fuel: 'Máquinas: abastecimento', ofi: 'Máquinas: oficina', gasto: 'Custo do contrato' };
+
+  function modelo() {
+    if (window.SB) { const a = h('a', { href: 'modelo-gastos.xlsx', download: 'modelo-gastos.xlsx' }); document.body.append(a); a.click(); a.remove(); return; }
+    exportCSV('modelo-gastos.csv', CAMPOS_GAS.map(x => x.l), []);
+  }
+  function detectar(rows) {
+    let best = { i: 0, n: 0 };
+    rows.slice(0, 15).forEach((r, i) => { const ks = new Set(r.map(x => ALIAS_GAS[slugH(x)]).filter(Boolean)); if (ks.has('valor') && ks.size > best.n) best = { i, n: ks.size }; });
+    return best.n >= 2 ? best.i : -1;
+  }
+  async function escolher(file) {
+    if (!file) return;
+    host.replaceChildren(h('p', { class: 'cell-s', style: { padding: '24px 0', textAlign: 'center' } }, 'Lendo a planilha…'));
+    try {
+      const rows = (await lerPlanilha(file)).filter(r => r.some(x => String(x == null ? '' : x).trim() !== ''));
+      if (!rows.length) throw new Error('A planilha está vazia.');
+      const hi = detectar(rows);
+      if (hi < 0) throw new Error('Não encontrei a linha de títulos (Data, Descrição, Valor…). Confira se a primeira linha tem os nomes das colunas ou baixe o modelo.');
+      st.rows = rows; st.head = hi; st.nome = file.name;
+      const used = new Set();
+      st.map = rows[hi].map(x => { const k = ALIAS_GAS[slugH(x)]; if (k && !used.has(k)) { used.add(k); return k; } return ''; });
+      paint(true);
+    } catch (err) { st.rows = null; paint(); toast(err && err.message ? err.message : 'Não consegui ler este arquivo.', 'bad'); }
+  }
+  function calcular() {
+    const ex = new Set();
+    S.data.gastos.filter(x => x.contratoId === c.id).forEach(x => ex.add(chaveGasto({ destino: 'gasto', data: x.data, valor: Math.round((+x.valor || 0) * 100) / 100, descricao: x.descricao, categoria: x.categoria })));
+    S.data.abastecimentos.filter(x => x.contratoId === c.id).forEach(x => ex.add(chaveGasto({ destino: 'fuel', data: x.data, valor: Math.round((+x.valor || 0) * 100) / 100, maquina: x.maquina })));
+    S.data.oficina.filter(x => x.contratoId === c.id).forEach(x => ex.add(chaveGasto({ destino: 'ofi', data: x.data, valor: Math.round((+x.valor || 0) * 100) / 100, maquina: x.maquina })));
+    const vistos = new Set();
+    return st.rows.slice(st.head + 1).map((r, i) => {
+      const raw = {}; st.map.forEach((k, ci) => { if (k && raw[k] == null) raw[k] = r[ci]; });
+      const m = montarGasto(raw, maqNomes); m.linha = st.head + i + 2; m.dup = null;
+      if (!m.er.length) { const k = chaveGasto(m.g); if (ex.has(k)) m.dup = 'Já existe no contrato'; else if (vistos.has(k)) m.dup = 'Repetido na planilha'; vistos.add(k); }
+      return m;
+    });
+  }
+  function paint(recalc) {
+    if (!st.rows) {
+      const inpF = h('input', { type: 'file', accept: '.xlsx,.xlsm,.csv,.txt,text/csv', hidden: true, onchange: ev => escolher(ev.target.files[0]) });
+      const drop = h('label', { class: 'drop', tabindex: '0' }, icon('upload', 22), h('b', null, 'Arraste a planilha aqui ou clique para escolher'), h('span', { class: 'cell-s' }, 'Excel (.xlsx) ou CSV. A primeira linha deve ter os títulos das colunas.'), inpF);
+      ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, ev => { ev.preventDefault(); drop.classList.add('on'); }));
+      ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, ev => { ev.preventDefault(); drop.classList.remove('on'); }));
+      drop.addEventListener('drop', ev => { if (ev.dataTransfer && ev.dataTransfer.files.length) escolher(ev.dataTransfer.files[0]); });
+      drop.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); inpF.click(); } });
+      host.replaceChildren(
+        h('p', { class: 'cell-s', style: { marginTop: 0 } }, 'Os gastos entram neste contrato (' + servico + '). Precisa de Data e Valor; Categoria, Descrição, Máquina e Litros ajudam. Combustível e oficina com máquina vão para Máquinas; o resto vira custo do contrato. Antes de gravar você confere tudo numa prévia.'),
+        drop,
+        h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '14px', flexWrap: 'wrap' } }, btn('Baixar planilha modelo', { icon: 'download', sm: true, onclick: modelo }), h('span', { class: 'cell-s' }, 'Já traz as colunas certas.')));
+      foot.replaceChildren(h('button', { class: 'btn', type: 'button', onclick: closeModal }, 'Cancelar'));
+      return;
+    }
+    if (recalc !== false) { itens = calcular(); st.sel = new Set(itens.map((m, i) => (!m.er.length && !m.dup) ? i : -1).filter(i => i >= 0)); }
+    const nOk = itens.filter(m => !m.er.length && !m.dup).length, nDup = itens.filter(m => m.dup).length, nErr = itens.filter(m => m.er.length).length;
+    const totSel = () => sum(Array.from(st.sel).map(i => itens[i]), m => m.g.valor || 0);
+    const mapa = h('details', { class: 'imp-map', open: st.mapOpen, ontoggle: ev => { st.mapOpen = ev.target.open; } }, h('summary', null, 'Colunas reconhecidas: ' + st.map.filter(Boolean).length + ' de ' + st.rows[st.head].filter(x => String(x).trim()).length + ' (clique para conferir ou ajustar)'),
+      h('div', { class: 'tbl-wrap' }, h('table', null, h('thead', null, h('tr', null, h('th', null, 'Coluna da planilha'), h('th', null, 'Exemplo'), h('th', null, 'Vai para o campo'))),
+        h('tbody', null, st.rows[st.head].map((x, ci) => String(x).trim() ? h('tr', null, h('td', { class: 'nw' }, String(x)), h('td', { class: 'cell-s clip' }, String((st.rows[st.head + 1] || [])[ci] ?? '').slice(0, 40)),
+          h('td', null, sel(CAMPOS_GAS.map(f => ({ v: f.k, l: f.l })), st.map[ci], 'Ignorar', { onchange: ev => { st.map = st.map.map((k, j) => j !== ci && k && k === ev.target.value ? '' : k); st.map[ci] = ev.target.value; paint(true); } }))) : null)))));
+    const tb = h('tbody');
+    itens.forEach((m, i) => {
+      const bloq = m.er.length > 0;
+      const cb = h('input', { type: 'checkbox', checked: st.sel.has(i), disabled: bloq, 'aria-label': 'Importar linha ' + m.linha, onchange: ev => { ev.target.checked ? st.sel.add(i) : st.sel.delete(i); atualiza(); } });
+      tb.append(h('tr', null, h('td', null, cb), h('td', { class: 'cell-s' }, m.linha),
+        h('td', null, bloq ? pill('Erro', 'bad') : m.dup ? pill(m.dup, 'warn') : pill('Novo', 'ok'), bloq ? h('div', { class: 'cell-s' }, m.er.join(', ')) : null,
+          !bloq && m.w.length ? h('div', { class: 'cell-s', title: m.w.join('\n') }, m.w.length === 1 ? m.w[0] : m.w.length + ' avisos: ' + m.w[0]) : null),
+        h('td', null, m.g.data ? fmtD(m.g.data) : '—'), h('td', null, m.g.categoria), h('td', { class: 'clip' }, m.g.descricao || '—'),
+        h('td', null, m.g.maquina || '—'), h('td', { class: 'r' }, m.g.litros ? fmtN(m.g.litros, 1) : '—'), h('td', { class: 'r' }, m.g.valor != null ? brl(m.g.valor, true) : '—'),
+        h('td', null, bloq ? '—' : DEST[m.g.destino])));
+    });
+    host.replaceChildren(
+      h('div', { class: 'note', style: { marginBottom: '12px' } }, h('b', null, st.nome), ' · ' + itens.length + ' linhas: ', h('b', null, nOk + ' novas'), nDup ? ', ' + nDup + ' já existentes ou repetidas (desmarcadas)' : '', nErr ? ', ' + nErr + ' com erro (não entram)' : '', '.'),
+      mapa,
+      h('div', { class: 'tbl-wrap', style: { maxHeight: '46vh', overflowY: 'auto', marginTop: '10px' } }, h('table', { class: 'imp-tb' }, h('thead', null, h('tr', null,
+        h('th', null, h('input', { type: 'checkbox', checked: nOk > 0 && st.sel.size === nOk, 'aria-label': 'Marcar todas', onchange: ev => { st.sel = new Set(ev.target.checked ? itens.map((m, i) => (!m.er.length && !m.dup) ? i : -1).filter(i => i >= 0) : []); paint(false); } })),
+        ['Linha', 'Situação', 'Data', 'Categoria', 'Descrição', 'Máquina', 'Litros', 'Valor', 'Vai para'].map((t, i) => h('th', { class: i === 6 || i === 7 ? 'r' : '' }, t)))), tb)),
+      h('p', { class: 'cell-s', id: 'imp-tot', style: { marginTop: '10px' } }, ''),
+      itens.some(m => m.dup) ? h('p', { class: 'cell-s' }, 'Para lançar de novo uma linha já existente, marque a caixa dela.') : null);
+    btnImp = h('button', { class: 'btn primary', type: 'button', onclick: gravar }, '');
+    foot.replaceChildren(h('button', { class: 'btn sp', type: 'button', onclick: () => { st.rows = null; paint(); } }, 'Escolher outra planilha'), h('button', { class: 'btn', type: 'button', onclick: closeModal }, 'Cancelar'), btnImp);
+    atualiza();
+  }
+  function atualiza() {
+    const tot = host.querySelector('#imp-tot'); if (tot) tot.textContent = st.sel.size ? 'Marcadas: ' + st.sel.size + ' linhas, somando ' + brl(sum(Array.from(st.sel).map(i => itens[i]), m => m.g.valor || 0), true) + '.' : '';
+    if (!btnImp) return; const n = st.sel.size; btnImp.textContent = n ? 'Importar ' + n + (n === 1 ? ' gasto' : ' gastos') : 'Nada marcado'; btnImp.disabled = !n || st.busy;
+  }
+  async function gravar() {
+    if (st.busy || !st.sel.size) return;
+    st.busy = true; atualiza();
+    const lista = Array.from(st.sel).sort((a, b) => a - b).map(i => itens[i]);
+    let feitos = 0, falhas = 0;
+    for (let i = 0; i < lista.length; i += 8) {
+      await Promise.all(lista.slice(i, i + 8).map(async m => {
+        const g = m.g, base = { contratoId: c.id, data: g.data, criadoEm: Date.now() };
+        try {
+          if (g.destino === 'fuel') await dbSave('abastecimentos', null, Object.assign(base, { maquina: g.maquina, servico, litros: g.litros, valor: g.valor, obs: g.descricao }));
+          else if (g.destino === 'ofi') await dbSave('oficina', null, Object.assign(base, { maquina: g.maquina, servico, tipo: g.tipoOfi, desc: g.descricao, valor: g.valor, obs: '' }));
+          else await dbSave('gastos', null, { contratoId: c.id, data: g.data, categoria: g.categoria, descricao: g.descricao, valor: g.valor });
+          feitos++;
+        } catch (er) { falhas++; }
+      }));
+      btnImp.textContent = 'Importando… ' + Math.min(i + 8, lista.length) + ' de ' + lista.length;
+    }
+    st.busy = false;
+    if (falhas) { toast(feitos + ' importados e ' + falhas + ' com falha. Tente importar de novo as que faltam.', 'bad'); atualiza(); return; }
+    closeModal(); toast(feitos + (feitos === 1 ? ' gasto importado' : ' gastos importados'));
+  }
+  openModal({ title: 'Importar planilha de gastos', size: 'lg', body: host, footer: foot, focus: false });
   paint();
 }
 /* ================= CONTROLE DE GASTOS (Natisa): contrato de roçada, máquinas e contas a pagar ================= */
@@ -3563,6 +3723,8 @@ input:focus{border-color:var(--primary)}
   try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.route === 'controle' || S.route === 'familia' || S.route === 'geral') render(); }); } catch (e) {}
   /* Ponte para a aba Custos de cada contrato: mesmos dados e mesmo lançamento do Controle de gastos */
   window.CTL_API = {
+    nomesMaquinas: () => getCfg().maquinas.map(m => m.nome),
+    nome: c => ctrNome(c),
     period: () => CT.period,
     setPeriod: p => { CT.period = p; },
     maquinas: id => { const prev = CT.contrato; CT.contrato = id; let M = null; try { M = model(); } catch (e) { console.error(e); } CT.contrato = prev; return M && M.selId === id ? M : null; },
