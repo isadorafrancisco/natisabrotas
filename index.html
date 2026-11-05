@@ -2912,41 +2912,93 @@ const viewControle = (function () {
     return '<p class="lead">Contas pontuais da família. Para marcar como paga, use o Calendário.</p><section class="card"><div class="card-h"><h3>Contas avulsas da família</h3><button class="btn sm primary" data-a="lancar" data-tab="conta" type="button">+ Conta avulsa</button></div>' +
       (a.length ? '<div class="scroll"><table><thead><tr><th>Vencimento</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>' + a.map(r => '<tr><td>' + fmtD(r.venc) + '</td><td>' + E(r.cat) + '</td><td style="text-align:left">' + E(r.desc) + '</td><td>' + R(r.valor) + '</td><td>' + E(r.status || 'Pendente') + '</td><td><button class="btn sm danger" data-a="delbill" data-id="' + r.id + '" type="button">Excluir</button></td></tr>').join('') + '</tbody></table></div>' : emptyBox('Nenhuma conta avulsa', 'Cadastre uma com + Conta avulsa.')) + '</section>';
   };
-  V.geral = function (M) {
+  V.geral = function (M, draws) {
     const t0 = new Date(); if (CT.gY == null) { CT.gY = t0.getFullYear(); CT.gM = t0.getMonth(); }
-    const key = CT.gY + '-' + pad(CT.gM + 1), td = M.td;
-    const inM = x => (x.data || '').slice(0, 7) === key;
-    const cid = r => r.contratoId || M.dc;
-    const bm = M.bills.filter(b => b.mes === key);
+    const keyOf = (y, m) => { const d = new Date(y, m, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
+    const key = keyOf(CT.gY, CT.gM), prevKey = keyOf(CT.gY, CT.gM - 1);
+    const cid = r => r.contratoId || M.dc, priceOf = id => (M.list.find(x => x.id === id) || M.ctr).preco;
     const sumB = (l, f) => sum(l.filter(f || (() => true)), b => b.valor || 0);
-    const fam = bm.filter(b => b.dono === 'familia'), emp = bm.filter(b => b.dono !== 'familia');
-    const fuel = S.data.abastecimentos.filter(inM), ofi = S.data.oficina.filter(inM);
-    const rows = M.list.map(k => {
-      const cb = bm.filter(b => b.dono === 'contrato' && b.contratoId === k.id);
-      const comb = sum(fuel.filter(r => cid(r) === k.id), r => +r.valor || 0), of = sum(ofi.filter(r => cid(r) === k.id), r => +r.valor || 0);
-      const contas = sumB(cb), aPagar = sumB(cb, b => b.status !== 'Pago');
-      return { nome: k.nome, contas, comb, of, gasto: contas + comb + of, aPagar };
-    });
-    const empRow = { nome: 'Empresa (contas gerais)', contas: sumB(emp, b => b.dono === 'empresa'), comb: 0, of: 0, aPagar: sumB(emp, b => b.dono === 'empresa' && b.status !== 'Pago') };
-    empRow.gasto = empRow.contas;
-    const famRow = { nome: 'Família', contas: sumB(fam), comb: 0, of: 0, gasto: sumB(fam), aPagar: sumB(fam, b => b.status !== 'Pago') };
-    const all = rows.concat([empRow, famRow]);
-    const tot = { gasto: sum(all, r => r.gasto), aPagar: sum(all, r => r.aPagar) };
-    const paga = sumB(bm, b => b.status === 'Pago');
+    /* tudo de um mês, por origem */
+    function agg(k) {
+      const inM = x => (x.data || '').slice(0, 7) === k;
+      const bm = M.bills.filter(b => b.mes === k), fuel = S.data.abastecimentos.filter(inM), ofi = S.data.oficina.filter(inM), prod = S.data.producao.filter(inM);
+      const rows = M.list.map(c => {
+        const cb = bm.filter(b => b.dono === 'contrato' && b.contratoId === c.id);
+        const comb = sum(fuel.filter(r => cid(r) === c.id), r => +r.valor || 0), of = sum(ofi.filter(r => cid(r) === c.id), r => +r.valor || 0);
+        const rec = sum(prod.filter(r => cid(r) === c.id), r => (+r.m2 || 0) * c.preco), contas = sumB(cb);
+        return { nome: c.nome, tipo: 'contrato', contas, comb, of, rec, gasto: contas + comb + of, aPagar: sumB(cb, b => b.status !== 'Pago') };
+      });
+      const e = bm.filter(b => b.dono === 'empresa'), f = bm.filter(b => b.dono === 'familia');
+      rows.push({ nome: 'Empresa (contas gerais)', tipo: 'empresa', contas: sumB(e), comb: 0, of: 0, rec: 0, gasto: sumB(e), aPagar: sumB(e, b => b.status !== 'Pago') });
+      rows.push({ nome: 'Família', tipo: 'familia', contas: sumB(f), comb: 0, of: 0, rec: 0, gasto: sumB(f), aPagar: sumB(f, b => b.status !== 'Pago') });
+      const cats = {}; bm.forEach(b => { const n = (b.dono === 'familia' ? 'Família · ' : '') + b.cat; cats[n] = (cats[n] || 0) + (b.valor || 0); });
+      const cm = sum(fuel, r => +r.valor || 0), om = sum(ofi, r => +r.valor || 0); if (cm) cats['Combustível'] = cm; if (om) cats['Oficina'] = om;
+      return { rows, bm, cats, gasto: sum(rows, r => r.gasto), aPagar: sum(rows, r => r.aPagar), receita: sum(rows, r => r.rec), pago: sumB(bm, b => b.status === 'Pago'),
+        contratos: sum(rows.filter(r => r.tipo === 'contrato'), r => r.gasto), empresa: rows[rows.length - 2].gasto, familia: rows[rows.length - 1].gasto };
+    }
+    const cur = agg(key), prev = agg(prevKey);
     const venc = M.bills.filter(M.isOver), vencSum = sum(venc, b => b.valor || 0);
-    const pend = bm.filter(b => b.status !== 'Pago').sort((a, b) => (a.venc || '9') < (b.venc || '9') ? -1 : 1);
+    const pend = cur.bm.filter(b => b.status !== 'Pago').sort((a, b) => (a.venc || '9') < (b.venc || '9') ? -1 : 1);
     const semValor = pend.filter(b => b.valor == null);
-    const sh = (n) => '<span class="pill mute">' + n + '</span>';
-    let h2 = '<p class="lead">Tudo junto: os contratos, a empresa e a família. Mostra quanto saiu e quanto ainda falta pagar no mês.</p>';
+    const dv = (a, b) => b ? (a - b) / b : null;
+    const varTxt = (a, b, inv) => { const v = dv(a, b); if (v == null) return '<span class="pill mute">sem base</span>'; const up = v > 0.005, dn = v < -0.005; const bad = inv ? dn : up, good = inv ? up : dn; return '<span class="pill ' + (bad ? 'warn' : good ? 'ok' : 'mute') + '">' + (up ? '↑ ' : dn ? '↓ ' : '') + Math.abs(v * 100).toFixed(0) + '%</span>'; };
+    const ks = (a, b, inv) => b ? 'Mês anterior ' + R0(b) + ' ' + varTxt(a, b, inv) : 'Sem dados no mês anterior';
+    /* últimos 6 meses */
+    const ms = []; for (let i = 5; i >= 0; i--) { const d = new Date(CT.gY, CT.gM - i, 1); ms.push({ k: keyOf(d.getFullYear(), d.getMonth()), l: MES3[d.getMonth()] + '/' + String(d.getFullYear()).slice(2) }); }
+    const hist = ms.map(x => Object.assign({ l: x.l }, agg(x.k)));
+    const media = sum(hist, x => x.gasto) / hist.length;
+    const sobraEmp = cur.receita - cur.contratos - cur.empresa, sobraFim = sobraEmp - cur.familia;
+    /* texto automático */
+    const topO = cur.rows.slice().sort((x, y) => y.gasto - x.gasto)[0];
+    const catE = Object.entries(cur.cats).sort((x, y) => y[1] - x[1]);
+    const ins = [];
+    if (cur.gasto > 0) {
+      ins.push('O maior gasto do mês é <b>' + E(topO.nome) + '</b>: ' + R0(topO.gasto) + ' (' + Math.round(topO.gasto / cur.gasto * 100) + '% do total).');
+      if (catE.length) ins.push('Por tipo de gasto, o que mais pesa é <b>' + E(catE[0][0]) + '</b> (' + R0(catE[0][1]) + ').');
+      if (prev.gasto) ins.push('Comparado com o mês anterior, o gasto total ' + (cur.gasto >= prev.gasto ? 'subiu ' : 'caiu ') + Math.abs(Math.round(dv(cur.gasto, prev.gasto) * 100)) + '% (' + R0(prev.gasto) + ' → ' + R0(cur.gasto) + ').');
+      if (media) ins.push('A média dos últimos 6 meses é ' + R0(media) + ' por mês; este mês está ' + (cur.gasto > media ? 'acima' : 'abaixo') + ' dela.');
+      if (cur.receita) ins.push('Os contratos renderam ' + R0(cur.receita) + ' no mês. Depois de pagar contratos e empresa sobram <b>' + R0(sobraEmp) + '</b>; depois da família, <b>' + R0(sobraFim) + '</b>.');
+      if (cur.familia && cur.gasto) ins.push('A família representa ' + Math.round(cur.familia / cur.gasto * 100) + '% de tudo o que se paga no mês.');
+    }
+    let h2 = '<p class="lead">Tudo junto: os contratos, a empresa e a família. Mostra quanto saiu, quanto falta pagar e como isso se compara ao mês anterior e aos últimos meses.</p>';
     h2 += '<div class="chips"><button class="btn sm" data-a="gnav" data-d="-1" type="button" aria-label="Mês anterior">‹</button><b style="align-self:center;min-width:150px;text-align:center">' + MESES[CT.gM].charAt(0).toUpperCase() + MESES[CT.gM].slice(1) + ' de ' + CT.gY + '</b><button class="btn sm" data-a="gnav" data-d="1" type="button" aria-label="Próximo mês">›</button><button class="btn sm" data-a="gnav" data-d="0" type="button">Hoje</button></div>';
-    h2 += '<section class="kpis">' + kpiH('Gastamos no mês', R0(tot.gasto), 'Contas, combustível e oficina') + kpiH('Já pago em contas', R0(paga), 'Contas marcadas como pagas') +
-      kpiH('Falta pagar no mês', R0(tot.aPagar), pend.length + ' conta(s) em aberto') + kpiH('Vencido (todos os meses)', R0(vencSum), venc.length ? venc.length + ' conta(s) atrasada(s)' : 'Nada atrasado') + '</section>';
-    h2 += '<section class="card"><h3>Quem gastou</h3><p class="sub">Cada linha soma os dados daquele contrato, da empresa ou da família.</p><div class="scroll"><table><thead><tr><th>Origem</th><th>Contas</th><th>Combustível</th><th>Oficina</th><th>Gasto no mês</th><th>Falta pagar</th></tr></thead><tbody>' +
-      all.map(r => '<tr><td>' + E(r.nome) + '</td><td>' + R(r.contas) + '</td><td>' + (r.comb ? R(r.comb) : '–') + '</td><td>' + (r.of ? R(r.of) : '–') + '</td><td><b>' + R(r.gasto) + '</b></td><td>' + (r.aPagar ? R(r.aPagar) : '–') + '</td></tr>').join('') +
-      '<tr class="tot"><td>Total</td><td>' + R(sum(all, r => r.contas)) + '</td><td>' + R(sum(all, r => r.comb)) + '</td><td>' + R(sum(all, r => r.of)) + '</td><td>' + R(tot.gasto) + '</td><td>' + R(tot.aPagar) + '</td></tr></tbody></table></div>' +
-      '<p class="note">Combustível e oficina vêm dos lançamentos e já contam como gastos. As contas entram pelo mês do vencimento.</p></section>';
+    h2 += '<section class="kpis">' + kpiH('Gastamos no mês', R0(cur.gasto), ks(cur.gasto, prev.gasto)) + kpiH('Falta pagar no mês', R0(cur.aPagar), pend.length + ' conta(s) em aberto · já pago ' + R0(cur.pago)) +
+      kpiH('Vencido (todos os meses)', R0(vencSum), venc.length ? venc.length + ' conta(s) atrasada(s)' : 'Nada atrasado') + kpiH('Receita dos contratos', R0(cur.receita), prev.receita ? 'Mês anterior ' + R0(prev.receita) + ' ' + varTxt(cur.receita, prev.receita, true) : 'Pelos m² lançados') + '</section>';
+    h2 += '<section class="kpis">' + kpiH('Contratos', R0(cur.contratos), ks(cur.contratos, prev.contratos)) + kpiH('Empresa', R0(cur.empresa), ks(cur.empresa, prev.empresa)) + kpiH('Família', R0(cur.familia), ks(cur.familia, prev.familia)) +
+      kpiH('Sobra depois de tudo', R0(sobraFim), 'Receita ' + R0(cur.receita) + ' menos ' + R0(cur.gasto), sobraFim < 0 ? 'bad' : 'hero') + '</section>';
+    if (ins.length) h2 += '<section class="card" style="background:var(--ok-bg)"><h3>O que os números dizem</h3><ul style="margin:8px 0 0;padding-left:18px;line-height:1.6">' + ins.map(x => '<li>' + x + '</li>').join('') + '</ul></section>';
+    h2 += '<section class="grid2"><div class="card"><h3>Gasto por mês: contratos, empresa e família</h3><p class="sub">Últimos 6 meses. A linha é a receita dos contratos.</p><div class="chart"><canvas id="g-meses" role="img" aria-label="Gasto por mês por origem"></canvas></div></div>' +
+      '<div class="card"><h3>Para onde foi o dinheiro</h3><p class="sub">Gasto do mês por origem.</p><div class="chart"><canvas id="g-rosca" role="img" aria-label="Gasto do mês por origem"></canvas></div></div></section>';
+    h2 += '<section class="grid2"><div class="card"><h3>Gasto por tipo</h3><p class="sub">As 10 maiores categorias do mês.</p><div class="chart"><canvas id="g-cat" role="img" aria-label="Gasto por categoria"></canvas></div></div>' +
+      '<div class="card"><h3>Contas a pagar por semana</h3><p class="sub">O que vence em cada semana do mês: pago e em aberto.</p><div class="chart"><canvas id="g-sem" role="img" aria-label="Contas por semana"></canvas></div></div></section>';
+    h2 += '<section class="card"><h3>Cada contrato: receita × gasto</h3><p class="sub">Quanto cada contrato rendeu e custou no mês.</p><div class="chart"><canvas id="g-ctr" role="img" aria-label="Receita e gasto por contrato"></canvas></div></section>';
+    h2 += '<section class="card"><h3>Comparação com o mês anterior</h3><p class="sub">Gasto de cada origem agora e no mês passado.</p><div class="scroll"><table><thead><tr><th>Origem</th><th>Contas</th><th>Combustível</th><th>Oficina</th><th>Gasto no mês</th><th>Mês anterior</th><th>Variação</th><th>Falta pagar</th></tr></thead><tbody>' +
+      cur.rows.map((r, i) => '<tr><td>' + E(r.nome) + '</td><td>' + R(r.contas) + '</td><td>' + (r.comb ? R(r.comb) : '–') + '</td><td>' + (r.of ? R(r.of) : '–') + '</td><td><b>' + R(r.gasto) + '</b></td><td>' + R(prev.rows[i].gasto) + '</td><td>' + varTxt(r.gasto, prev.rows[i].gasto) + '</td><td>' + (r.aPagar ? R(r.aPagar) : '–') + '</td></tr>').join('') +
+      '<tr class="tot"><td>Total</td><td>' + R(sum(cur.rows, r => r.contas)) + '</td><td>' + R(sum(cur.rows, r => r.comb)) + '</td><td>' + R(sum(cur.rows, r => r.of)) + '</td><td>' + R(cur.gasto) + '</td><td>' + R(prev.gasto) + '</td><td>' + varTxt(cur.gasto, prev.gasto) + '</td><td>' + R(cur.aPagar) + '</td></tr></tbody></table></div>' +
+      '<p class="note">Combustível e oficina vêm dos lançamentos e já contam como gastos. As contas entram pelo mês do vencimento. Meses antes do início do calendário aparecem zerados.</p></section>';
+    h2 += '<section class="card"><h3>Últimos 6 meses em números</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Contratos</th><th>Empresa</th><th>Família</th><th>Gasto total</th><th>Receita</th><th>Sobra</th></tr></thead><tbody>' +
+      hist.map(x => '<tr><td>' + x.l + '</td><td>' + R(x.contratos) + '</td><td>' + R(x.empresa) + '</td><td>' + R(x.familia) + '</td><td><b>' + R(x.gasto) + '</b></td><td>' + R(x.receita) + '</td><td>' + R(x.receita - x.gasto) + '</td></tr>').join('') +
+      '<tr class="tot"><td>Média</td><td>' + R(sum(hist, x => x.contratos) / 6) + '</td><td>' + R(sum(hist, x => x.empresa) / 6) + '</td><td>' + R(sum(hist, x => x.familia) / 6) + '</td><td>' + R(media) + '</td><td>' + R(sum(hist, x => x.receita) / 6) + '</td><td>' + R(sum(hist, x => x.receita - x.gasto) / 6) + '</td></tr></tbody></table></div></section>';
     h2 += '<section class="card"><div class="card-h"><div><h3>O que falta pagar</h3><p class="sub" style="margin:0">Em ordem de vencimento. ' + (semValor.length ? semValor.length + ' conta(s) sem valor ainda, preencha no Calendário.' : '') + '</p></div></div>' +
       (pend.length ? pend.map(b => '<div class="row"><div class="datebadge ' + (M.isOver(b) ? 'late' : '') + '">' + (b.venc ? '<b>' + pad(parseD(b.venc).getDate()) + '</b><span>' + MES3[parseD(b.venc).getMonth()] + '</span>' : '<b>?</b><span>s/ data</span>') + '</div><div class="grow"><b>' + E(b.cat) + '</b><span>' + E(donoTxt(b)) + (b.dono === 'contrato' ? ': ' + E((M.list.find(x => x.id === b.contratoId) || {}).nome || '') : '') + (M.isOver(b) ? ' · vencida' : '') + '</span></div><b class="num">' + (b.valor != null ? R(b.valor) : '?') + '</b>' + (b.valor != null ? '<button class="btn sm" data-a="pay" data-id="' + b.id + '" type="button">Pagar</button>' : '') + '</div>').join('') : emptyBox('Tudo pago', 'Não há contas em aberto neste mês.')) + '</section>';
+
+    /* gráficos */
+    const hz = (cs, extra) => { const o = baseOpts(cs); o.scales.x.stacked = false; o.scales.y.stacked = false; return Object.assign(o, extra || {}); };
+    chartDraw(draws, 'g-meses', cs => { const o = baseOpts(cs); return { type: 'bar', data: { labels: hist.map(x => x.l), datasets: [
+      { label: 'Contratos', data: hist.map(x => x.contratos), backgroundColor: cs('--info'), stack: 's' },
+      { label: 'Empresa', data: hist.map(x => x.empresa), backgroundColor: cs('--warn'), stack: 's' },
+      { label: 'Família', data: hist.map(x => x.familia), backgroundColor: cs('--viol'), stack: 's' },
+      { type: 'line', label: 'Receita dos contratos', data: hist.map(x => x.receita), borderColor: cs('--primary'), backgroundColor: cs('--primary'), borderWidth: 2.5, pointRadius: 3, tension: .25 }] }, options: o }; });
+    chartDraw(draws, 'g-rosca', cs => { const items = cur.rows.filter(r => r.gasto > 0), ink = cs('--muted'); const pal = [cs('--info'), cs('--lime'), cs('--warn'), cs('--viol'), cs('--primary')];
+      return { type: 'doughnut', data: { labels: items.map(r => r.nome), datasets: [{ data: items.map(r => r.gasto), backgroundColor: items.map((r, i) => r.tipo === 'familia' ? cs('--viol') : r.tipo === 'empresa' ? cs('--warn') : pal[i % pal.length]), borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { color: ink, usePointStyle: true, boxWidth: 8, boxHeight: 8, font: { size: 12 } } }, tooltip: { callbacks: { label: c => c.label + ': ' + R(c.parsed) + ' (' + Math.round(c.parsed / (cur.gasto || 1) * 100) + '%)' } } } } }; });
+    chartDraw(draws, 'g-cat', cs => { const top = catE.slice(0, 10), o = hz(cs, { indexAxis: 'y' }); o.plugins.legend = { display: false }; o.plugins.tooltip = { callbacks: { label: c => R(c.parsed.x) } };
+      o.scales.x.ticks.callback = v => R0(v); o.scales.y = { ticks: { color: cs('--muted') }, grid: { display: false } }; o.scales.x.grid = { color: cs('--line') };
+      return { type: 'bar', data: { labels: top.map(x => x[0]), datasets: [{ label: 'Gasto', data: top.map(x => x[1]), backgroundColor: cs('--info'), borderRadius: 4 }] }, options: o }; });
+    const wk = {}; cur.bm.forEach(b => { if (!b.venc) return; const w = weekStart(b.venc); wk[w] = wk[w] || { p: 0, a: 0 }; wk[w][b.status === 'Pago' ? 'p' : 'a'] += b.valor || 0; });
+    const wks = Object.keys(wk).sort();
+    chartDraw(draws, 'g-sem', cs => ({ type: 'bar', data: { labels: wks.map(w => fmtS(w)), datasets: [{ label: 'Pago', data: wks.map(w => wk[w].p), backgroundColor: cs('--ok') }, { label: 'Em aberto', data: wks.map(w => wk[w].a), backgroundColor: cs('--warn') }] }, options: baseOpts(cs) }));
+    chartDraw(draws, 'g-ctr', cs => { const cr = cur.rows.filter(r => r.tipo === 'contrato'), o = hz(cs); return { type: 'bar', data: { labels: cr.map(r => r.nome), datasets: [{ label: 'Receita', data: cr.map(r => r.rec), backgroundColor: cs('--primary'), borderRadius: 4 }, { label: 'Gasto', data: cr.map(r => r.gasto), backgroundColor: cs('--warn'), borderRadius: 4 }] }, options: o }; });
     return h2;
   };
   V.lanc = function (M) {
@@ -3169,8 +3221,8 @@ input:focus{border-color:var(--primary)}
     const fam = CT.mode === 'familia', ger = CT.mode === 'geral';
     const TB = fam ? FTABS : TABS, cur = fam ? CT.ftab : CT.tab;
     const tabs = ger ? '' : '<div class="tabs" role="tablist">' + TB.map(t => '<button class="tab" role="tab" data-a="' + (fam ? 'ftab' : 'tab') + '" data-t="' + t[0] + '" aria-selected="' + (cur === t[0]) + '" type="button">' + t[1] + '</button>').join('') + '</div>';
-    const withChips = !fam && ['resumo', 'contrato', 'producao', 'maquinas', 'lanc'].indexOf(CT.tab) >= 0;
-    const body = ger ? V.geral(M) : fam ? (V['fam_' + CT.ftab] || V.fam_calendario)(M, draws) : (V[CT.tab] || V.resumo)(M, draws);
+    const withChips = !fam && !ger && ['resumo', 'contrato', 'producao', 'maquinas', 'lanc'].indexOf(CT.tab) >= 0;
+    const body = ger ? V.geral(M, draws) : fam ? (V['fam_' + CT.ftab] || V.fam_calendario)(M, draws) : (V[CT.tab] || V.resumo)(M, draws);
     root.innerHTML = '<style>' + CSS + '</style><div class="ctl">' + tabs + (fam || ger ? '' : banners(M)) + (withChips ? ctrChips(M) : '') + body + '</div>';
     root.addEventListener('click', e => {
       const b = e.target.closest('[data-a]'); if (!b) return;
