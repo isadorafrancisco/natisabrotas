@@ -20,3 +20,9 @@ Hospedado no GitHub Pages; os dados ficam no Supabase e só aparecem depois do l
 6. GitHub → Settings → Pages → Source: *Deploy from a branch* → `main` / `(root)`.
 
 Nunca coloque a chave `service_role` neste repositório.
+
+## Controle de gastos por contrato e Família
+- Cada lançamento (abastecimento, oficina, produção, conta avulsa) agora pertence a um contrato. Lançamentos antigos, sem contrato, valem para o contrato padrão (Ajustes).
+- Os contratos vêm do Fechamento (em execução). O campo "Valor pago por m²" do contrato alimenta a receita.
+- Calendário: Geral, um por contrato e Família. Contas da família ficam fora dos gastos da empresa.
+- Menu "Família": calendário, contas fixas e contas avulsas pessoais.
