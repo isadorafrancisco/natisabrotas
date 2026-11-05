@@ -2036,6 +2036,21 @@ function tabFin(c, s) {
       fk('Recebido', brl(s.recebido), ' ', s.recebido > 0 ? 'ok' : ''),
       fk('A receber', brl(s.aReceber), s.atrasado > 0 ? brl(s.atrasado) + ' em atraso' : ' ', s.atrasado > 0 ? 'bad' : s.aReceber > 0 ? 'warn' : ''),
       fk('A faturar', brl(s.aFaturar), 'saldo do contrato')),
+    (() => {
+      const feitoR = sum(s.med, m => m.valorFaturado), feitoM = sum(s.med, m => m.m2), totR = c.valorContratado || 0, totM = c.m2Contratado || 0;
+      const bloco = (titulo, tot, feito, fmt, un, dica) => h('div', { class: 'card card-p' }, h('h3', null, titulo),
+        tot ? h('div', null,
+          h('div', { class: 'kpi-v', style: { margin: '6px 0 10px', color: tot - feito < 0 ? 'var(--bad)' : '' } }, fmt(Math.max(0, tot - feito)) + un),
+          h('div', { class: 'kv' }, h('span', null, 'Total do contrato'), h('b', null, fmt(tot) + un)),
+          h('div', { class: 'kv' }, h('span', null, 'Já feito'), h('b', null, '− ' + fmt(feito) + un)),
+          h('div', { class: 'kv' }, h('span', null, 'Falta fazer'), h('b', null, '= ' + fmt(Math.max(0, tot - feito)) + un)),
+          h('div', { class: 'bar ' + (feito > tot ? 'bad' : 'ok'), style: { margin: '10px 0 4px' } }, h('i', { style: { width: Math.min(100, feito / tot * 100) + '%' } })),
+          h('div', { class: 'cell-s' }, pct(Math.min(1, feito / tot), 0) + ' do contrato feito' + (feito > tot ? ' · passou ' + fmt(feito - tot) + un : '')))
+          : h('p', { class: 'cell-s', style: { marginTop: '8px' } }, dica));
+      return h('div', { class: 'grid g-2', style: { marginTop: '16px' } },
+        bloco('Falta fazer em R$', totR, feitoR, v => brl(v, true), '', 'Informe o valor do contrato em Dados do contrato.'),
+        bloco('Falta fazer em m²', totM, feitoM, v => fmtN(v, 2), ' m²', 'Informe os m² do contrato em Dados do contrato e os m² roçados em cada mês.'));
+    })(),
     s.faturado > (c.valorContratado || Infinity) + 0.005 ? h('div', { class: 'banner', style: { marginTop: '14px' } }, 'Atenção: o total faturado passou do valor do contrato (' + brl(s.faturado - c.valorContratado) + ' a mais). Confira se há aditivo.') : null,
     h('div', { class: 'card', style: { marginTop: '16px' } },
       h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Medições e recebimentos'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), btn('Nova medição', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specMedicao(c), null) })),
