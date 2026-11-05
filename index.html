@@ -1231,7 +1231,7 @@ function crudTable(spec, rows) {
   const foot = spec.footer ? spec.footer(rows) : null;
   return h('div', { class: 'tbl-wrap' }, h('table', null,
     h('thead', null, h('tr', null, spec.cols.map(c => h('th', { class: c.r ? 'r' : '' }, c.h)))),
-    h('tbody', null, rows.map(r => h('tr', { class: 'row', onclick: () => crudForm(spec, r) }, spec.cols.map(c => h('td', { class: c.r ? 'r' : '' }, c.f(r)))))),
+    h('tbody', null, rows.map(r => h('tr', { class: 'row', onclick: () => { if (spec.onRow && spec.onRow(r)) return; crudForm(spec, r); } }, spec.cols.map(c => h('td', { class: c.r ? 'r' : '' }, c.f(r)))))),
     foot ? h('tfoot', null, foot) : null));
 }
 
@@ -1795,9 +1795,17 @@ function vigenciaInfo(c) {
   if (dias === 0) return { txt: 'Vence hoje', kind: 'bad', dias };
   return { txt: 'Vence em ' + dias + ' dia' + (dias === 1 ? '' : 's'), kind: dias <= 30 ? 'bad' : dias <= 90 ? 'warn' : 'ok', dias };
 }
+/* Abastecimentos e oficina lançados nas Máquinas (ou no Controle de gastos) entram como custo do contrato, sem lançar duas vezes */
+function custosDeMaquinas(c) {
+  const ab = (S.data.abastecimentos || []).filter(x => x.contratoId === c.id && +x.valor > 0).map(x => ({ id: 'ab:' + x.id, _maq: true, _col: 'abastecimentos', _id: x.id, data: x.data, categoria: 'Combustível', valor: +x.valor,
+    descricao: [x.maquina, x.litros ? fmtN(+x.litros, 1) + ' L' : ''].filter(Boolean).join(' · ') }));
+  const of = (S.data.oficina || []).filter(x => x.contratoId === c.id && +x.valor > 0).map(x => ({ id: 'of:' + x.id, _maq: true, _col: 'oficina', _id: x.id, data: x.data, categoria: 'Oficina e manutenção', valor: +x.valor,
+    descricao: [x.maquina, x.tipo, x.desc].filter(Boolean).join(' · ') }));
+  return ab.concat(of);
+}
 function fechStats(c) {
   const med = S.data.medicoes.filter(m => m.contratoId === c.id);
-  const gas = S.data.gastos.filter(g => g.contratoId === c.id);
+  const gas = S.data.gastos.filter(g => g.contratoId === c.id).concat(custosDeMaquinas(c));
   const faturado = sum(med, m => m.valorFaturado), recebido = sum(med, m => m.valorRecebido);
   const atrasado = sum(med.filter(m => medSit(m) === 'Atrasado'), m => (m.valorFaturado || 0) - (m.valorRecebido || 0));
   const custoReal = sum(gas, g => g.valor);
@@ -2141,7 +2149,14 @@ function tabLucro(c, s) {
 /* ---------- aba Custos ---------- */
 function tabCustos(c, s) {
   const spec = specGasto(c);
-  spec.cols = [{ h: 'Data', f: r => fmtD(r.data) }, { h: 'Categoria', f: r => pill(r.categoria || 'Outros') }, { h: 'Descrição', f: r => r.descricao || '' }, { h: 'Valor', r: true, f: r => brl(r.valor, true) }];
+  spec.onRow = r => {
+    if (!r._maq) return false;
+    openModal({ title: r._col === 'oficina' ? 'Oficina lançada em Máquinas' : 'Abastecimento lançado em Máquinas', size: 'sm',
+      body: [h('p', null, fmtD(r.data) + ' · ' + (r.descricao || '') + ' · ' + brl(r.valor)), h('p', { class: 'cell-s' }, 'Este custo veio do lançamento de Máquinas e já está somado aqui e no Lucro. Para corrigir, exclua e lance de novo.')],
+      footer: [h('button', { class: 'btn danger sp', type: 'button', onclick: async () => { if (await askConfirm({ title: 'Excluir lançamento', text: 'Excluir este lançamento? Ele some das Máquinas, do Controle de gastos e dos custos do contrato.', yes: 'Excluir', danger: true })) { await dbDelete(r._col, r._id); closeModal(); toast('Lançamento excluído'); } } }, 'Excluir'), h('button', { class: 'btn', type: 'button', onclick: closeModal }, 'Fechar')] });
+    return true;
+  };
+  spec.cols = [{ h: 'Data', f: r => fmtD(r.data) }, { h: 'Categoria', f: r => pill(r.categoria || 'Outros') }, { h: 'Descrição', f: r => r._maq ? [r.descricao || '', ' ', h('span', { class: 'cell-s' }, '(Máquinas)')] : (r.descricao || '') }, { h: 'Valor', r: true, f: r => brl(r.valor, true) }];
   spec.emptyTitle = 'Nenhum custo lançado'; spec.emptyText = 'Lance o que o contrato gastou: combustível, máquinas, oficina, pessoal, materiais… O sistema soma por mês e desconta do lucro.';
   spec.footer = rows => h('tr', null, h('td', { colspan: 3 }, h('b', null, 'Total')), h('td', { class: 'r' }, h('b', null, brl(sum(rows, r => r.valor), true))));
   const rows = s.gas.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
@@ -2178,7 +2193,7 @@ function secMaquinas(c) {
   const chips = [['sem', 'Esta semana'], ['30', 'Últimos 30 dias'], ['all', 'Tudo']].map(p => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(per === p[0]), onclick: () => { api.setPeriod(p[0]); render(); } }, p[1]));
   const acts = M ? [btn('Abastecimento', { icon: 'plus', sm: true, kind: 'primary', onclick: () => api.lancar('fuel', c.id) }), btn('Oficina', { icon: 'plus', sm: true, onclick: () => api.lancar('ofi', c.id) }), btn('Área roçada', { icon: 'plus', sm: true, onclick: () => api.lancar('prod', c.id) })] : [];
   const head = h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } },
-    h('div', null, h('h3', null, 'Máquinas deste contrato'), h('p', { class: 'sub' }, 'Combustível e oficina de cada máquina neste contrato. A folha não entra aqui. Os lançamentos também aparecem no Controle de gastos.')),
+    h('div', null, h('h3', null, 'Máquinas deste contrato'), h('p', { class: 'sub' }, 'Combustível e oficina de cada máquina neste contrato. A folha não entra aqui. Cada lançamento entra sozinho em Custos lançados, no lucro do contrato e no Controle de gastos.')),
     h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, acts));
   let body;
   if (!M) body = h('div', { class: 'card-p' }, h('p', { class: 'cell-s' }, 'As máquinas aparecem quando o contrato está "Em execução". Mude a situação em Dados do contrato para ver e lançar aqui.'));
