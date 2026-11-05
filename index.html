@@ -1970,8 +1970,7 @@ const SPEC_CONTRATO = {
     { k: 'numeroContrato', label: 'Número do contrato', type: 'text' },
     { k: 'status', label: 'Situação', type: 'select', opts: STATUS_CONTRATO, blank: undefined },
     { k: 'valorContratado', label: 'Valor do contrato (R$)', type: 'number' },
-    { k: 'precoM2', label: 'Valor pago por m² (R$)', type: 'number', step: '0.0001', hint: 'Usado no Controle de gastos e na aba Lucro para calcular o que a gente ganha por m² roçado.' },
-    { k: 'm2Contratado', label: 'Metros quadrados do contrato (m²)', type: 'number', hint: 'Opcional. Mostra na aba Lucro quantos m² ainda faltam roçar.' },
+    { k: 'precoM2', label: 'Valor pago por m² (R$)', type: 'number', step: '0.0001', hint: 'Ex.: 0,40. Com o valor do contrato, o sistema calcula sozinho os m² do contrato e quanto falta fazer. Também é usado no Controle de gastos e na aba Lucro.' },
     { k: 'meses', label: 'Duração (meses)', type: 'number', step: '1', hint: 'Com o início da vigência, o fim é calculado se estiver vazio.' },
     { k: 'dataAssinatura', label: 'Data de assinatura', type: 'date' },
     { k: 'ordemServico', label: 'Ordem de serviço', type: 'date' },
@@ -1991,7 +1990,7 @@ function tabDados(c) {
   return h('div', { class: 'card card-p' },
     h('dl', { class: 'dgrid', style: { margin: 0 } },
       dd('Órgão', c.orgao), dd('Cidade', c.cidade), dd('Empresa (CNPJ) do contrato', c.empresa), dd('Situação', c.status),
-      dd('Número do contrato', c.numeroContrato), dd('Número do edital', c.numeroEdital), dd('Modalidade', c.modalidade), dd('Valor do contrato', brl(c.valorContratado, true)), dd('Metros quadrados do contrato', c.m2Contratado ? fmtN(c.m2Contratado, 2) + ' m²' : null),
+      dd('Número do contrato', c.numeroContrato), dd('Número do edital', c.numeroEdital), dd('Modalidade', c.modalidade), dd('Valor do contrato', brl(c.valorContratado, true)), dd('Metros quadrados do contrato', m2Total(c) ? fmtN(m2Total(c), 2) + ' m² (valor do contrato ÷ valor por m²)' : null),
       dd('Assinatura', fmtD(c.dataAssinatura)), dd('Ordem de serviço', fmtD(c.ordemServico)), dd('Início da vigência', fmtD(c.inicioVigencia)), dd('Fim da vigência', fmtD(c.fimVigencia)),
       dd('Duração', c.meses ? c.meses + ' meses' : null), dd('Gestor do contrato', c.gestor), dd('Fiscal do contrato', c.fiscal),
       dd('Contato do órgão', [c.contatoNome, c.contatoTel, c.contatoEmail].filter(Boolean).join(' · ')),
@@ -2045,7 +2044,7 @@ function tabFin(c, s) {
       fk('A receber', brl(s.aReceber), s.atrasado > 0 ? brl(s.atrasado) + ' em atraso' : ' ', s.atrasado > 0 ? 'bad' : s.aReceber > 0 ? 'warn' : ''),
       fk('A faturar', brl(s.aFaturar), 'saldo do contrato')),
     (() => {
-      const feitoR = sum(s.med, m => m.valorFaturado), feitoM = sum(s.med, m => m.m2), totR = c.valorContratado || 0, totM = c.m2Contratado || 0;
+      const feitoR = sum(s.med, m => m.valorFaturado), pr = +c.precoM2 > 0 ? +c.precoM2 : 0, totR = c.valorContratado || 0, totM = m2Total(c) || 0, feitoM = pr ? feitoR / pr : 0;
       const bloco = (titulo, tot, feito, fmt, un, dica) => h('div', { class: 'card card-p' }, h('h3', null, titulo),
         tot ? h('div', null,
           h('div', { class: 'kpi-v', style: { margin: '6px 0 10px', color: tot - feito < 0 ? 'var(--bad)' : '' } }, fmt(Math.max(0, tot - feito)) + un),
@@ -2057,7 +2056,7 @@ function tabFin(c, s) {
           : h('p', { class: 'cell-s', style: { marginTop: '8px' } }, dica));
       return h('div', { class: 'grid g-2', style: { marginTop: '16px' } },
         bloco('Falta fazer em R$', totR, feitoR, v => brl(v, true), '', 'Informe o valor do contrato em Dados do contrato.'),
-        bloco('Falta fazer em m²', totM, feitoM, v => fmtN(v, 2), ' m²', 'Informe os m² do contrato em Dados do contrato e os m² roçados em cada mês.'));
+        bloco('Falta fazer em m²', totM, feitoM, v => fmtN(v, 0), ' m²', totR ? [h('span', null, 'Informe o valor pago por m² (ex.: 0,40) em Dados do contrato. O sistema divide o valor do contrato por ele e calcula os m² sozinho. '), btn('Informar valor do m²', { sm: true, icon: 'edit', onclick: () => editarContrato(c) })] : 'Informe o valor do contrato e o valor pago por m² em Dados do contrato.'));
     })(),
     s.faturado > (c.valorContratado || Infinity) + 0.005 ? h('div', { class: 'banner', style: { marginTop: '14px' } }, 'Atenção: o total faturado passou do valor do contrato (' + brl(s.faturado - c.valorContratado) + ' a mais). Confira se há aditivo.') : null,
     h('div', { class: 'card', style: { marginTop: '16px' } },
@@ -2073,10 +2072,11 @@ function specGasto(c) {
 }
 function precoDoContrato(c) {
   if (+c.precoM2) return +c.precoM2;
-  if (c.valorContratado && c.m2Contratado) return Math.round(c.valorContratado / c.m2Contratado * 10000) / 10000;
   const u = S.data.medicoes.filter(m => m.contratoId === c.id && m.precoM2).sort((a, b) => (b.competencia || '').localeCompare(a.competencia || ''))[0];
   return u ? u.precoM2 : null;
 }
+/* m² do contrato = valor total do contrato ÷ valor pago por m² (ex.: R$ 55.860 ÷ R$ 0,40 = 139.650 m²) */
+function m2Total(c) { const pr = +c.precoM2; return pr > 0 && c.valorContratado > 0 ? c.valorContratado / pr : null; }
 const brl4 = n => n == null || !isFinite(n) ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4 });
 /* uma linha por mês: o que foi roçado/produzido, os custos do mês, o lucro e quanto sobrou no contrato */
 function mesesLucro(c, s) {
@@ -2114,7 +2114,7 @@ function tabLucro(c, s) {
   const total = c.valorContratado || 0, sobrou = total ? total - prod : null;
   const mesAtual = meses.find(r => r.mes === hoje);
   const lucro = prod - s.custoReal;
-  const m2Rest = c.m2Contratado ? c.m2Contratado - m2 : null;
+  const pr2 = precoDoContrato(c), m2Rest = pr2 && total ? (total - prod) / pr2 : null;
   const novo = () => crudForm(specProducao(c), null);
   const abrir = r => r.meds.length ? crudForm(specProducao(c), r.meds[0]) : crudForm(Object.assign(specProducao(c), { defaults: { competencia: r.mes, precoM2: precoDoContrato(c) } }), null);
   const pctUsado = total ? Math.min(1, prod / total) : 0;
@@ -2132,7 +2132,7 @@ function tabLucro(c, s) {
     : emptyState('Nenhum mês lançado', 'Lance, mês a mês, quantos m² foram roçados. O sistema multiplica pelo valor do m², abate do contrato e mostra o lucro depois de descontar os custos.', btn('Lançar mês', { kind: 'primary', icon: 'plus', onclick: novo }));
   return h('div', null,
     h('div', { class: 'grid g-kpi' },
-      fk('Valor do contrato', total ? brl(total) : '—', c.m2Contratado ? fmtN(c.m2Contratado, 0) + ' m² contratados' : (total ? 'total a receber no contrato' : 'informe em Dados do contrato')),
+      fk('Valor do contrato', total ? brl(total) : '—', m2Total(c) ? fmtN(m2Total(c), 0) + ' m² contratados' : (total ? 'total a receber no contrato' : 'informe em Dados do contrato')),
       fk('Já produzido (abatido)', brl(prod), total ? pct(prod / total, 0) + ' do contrato · ' + fmtN(m2, 0) + ' m²' : fmtN(m2, 0) + ' m² roçados'),
       fk('Sobrou no contrato', sobrou == null ? '—' : brl(Math.max(0, sobrou)), m2Rest != null ? fmtN(Math.max(0, m2Rest), 0) + ' m² ainda por roçar' : (sobrou != null && sobrou < 0 ? 'passou ' + brl(-sobrou) + ' do contrato' : 'valor que ainda dá para produzir'), sobrou != null && sobrou < 0 ? 'bad' : ''),
       fk('Neste mês (' + compLabel(hoje) + ')', mesAtual && mesAtual.produzido ? brl(mesAtual.produzido) : '—', mesAtual && mesAtual.produzido ? (mesAtual.m2 ? fmtN(mesAtual.m2, 0) + ' m² roçados · ' : '') + 'lucro ' + brl(mesAtual.lucro) : 'nada lançado neste mês', mesAtual && mesAtual.produzido ? tone(mesAtual.lucro) : ''),
