@@ -3029,6 +3029,18 @@ const viewControle = (function () {
     const t = M.tot, ws = M.weeks.slice(-12);
     let h2 = '<p class="lead">O combustível e a oficina batem com a área roçada? Cada semana é comparada com a média geral; passou de ' + Math.round(M.cfg.tol * 100) + '% acima, vira alerta.</p>';
     h2 += '<section class="kpis">' + kpiH('Média geral de consumo', t.l1000 != null ? N2(t.l1000) + ' L' : '–', 'por 1.000 m² roçados') + kpiH('Combustível por 1.000 m²', t.m2 ? R(t.comb / t.m2 * 1000) : '–', 'média geral') + kpiH('Oficina por 1.000 m²', t.o1000 != null ? R(t.o1000) : '–', 'média geral') + kpiH('Total roçado', N0(t.m2) + ' m²', 'desde ' + fmtS(M.inicio)) + '</section>';
+    /* quanto já foi roçado em cada contrato (tudo que foi lançado em Produção e Máquinas) contra o total do contrato */
+    if (M.list.length) {
+      const cards = M.list.map(x => {
+        const k = S.data.contratos.find(z => z.id === x.id), feito = sum(S.data.producao.filter(r => (r.contratoId || M.dc) === x.id), r => +r.m2 || 0);
+        const pr = k && +k.precoM2 > 0 ? +k.precoM2 : 0, tot = k && pr && k.valorContratado > 0 ? k.valorContratado / pr : 0, falta = Math.max(0, tot - feito), p = tot ? feito / tot : 0;
+        return '<div class="card mach"><div><h3>' + E(x.nome) + '</h3><span class="sub" style="margin:0">' + (tot ? N0(tot) + ' m² contratados' : 'Total em m² não informado') + '</span></div>' +
+          '<div class="big">' + N0(feito) + ' m²</div><div class="bar"><i style="width:' + Math.min(100, p * 100) + '%"></i></div>' +
+          (tot ? '<div class="stats"><div>Já roçado<b>' + N0(feito) + ' m²</b></div><div>Falta fazer<b>' + N0(falta) + ' m²</b></div><div>Feito<b>' + pct(Math.min(1, p), 0).replace('.', ',') + '</b></div><div>Valor por m²<b>' + R(pr) + '</b></div></div>' + (feito > tot ? '<p class="sub" style="margin:8px 0 0">Passou ' + N0(feito - tot) + ' m² do contrato.</p>' : '')
+            : '<p class="sub" style="margin:10px 0 0">' + (k ? 'Preencha o valor do contrato e o valor pago por m² em Contratos > Dados do contrato para ver quanto falta.' : 'Contrato geral, sem valor total cadastrado.') + '</p>') + '</div>';
+      }).join('');
+      h2 += '<section><h3 style="margin:18px 2px 4px">Todos os contratos</h3><p class="sub" style="margin:0 2px 12px">m² já roçados em cada contrato, somando tudo que foi lançado em Produção e Máquinas.</p><div class="grid3">' + cards + '</div></section>';
+    }
     h2 += '<section class="card"><h3>Área roçada e consumo por semana</h3><p class="sub">Barras: m² roçados. Linha: litros por 1.000 m². Tracejado: média geral.</p><div class="chart"><canvas id="c-pro" role="img" aria-label="Área roçada e litros por mil metros quadrados"></canvas></div></section>';
     h2 += '<section class="card"><h3>Semana a semana</h3><p class="sub">Semanas acima da tolerância ganham alerta.</p><div class="scroll"><table><thead><tr><th>Semana</th><th>m² roçados</th><th>Litros</th><th>Combustível</th><th>Oficina</th><th>L / 1.000 m²</th><th>Comb. R$ / 1.000 m²</th><th>Oficina R$ / 1.000 m²</th><th>Alerta</th></tr></thead><tbody>' +
       M.weeks.slice().reverse().map(w => '<tr><td>' + wkLabel(w) + '</td><td>' + N0(w.m2) + '</td><td>' + N1(w.litros) + '</td><td>' + R(w.comb) + '</td><td>' + R(w.ofi) + '</td><td class="' + (w.alertas.some(a => /Combust.*acima/.test(a)) ? 'neg' : '') + '">' + (w.l1000 != null ? N2(w.l1000) : '–') + '</td><td>' + (w.c1000 != null ? R(w.c1000) : '–') + '</td><td>' + (w.o1000 != null ? R(w.o1000) : '–') + '</td><td>' + (w.alertas.length ? w.alertas.map(a => '<span class="pill warn">' + E(a) + '</span>').join(' ') : '<span class="pill ok">Normal</span>') + '</td></tr>').join('') + '</tbody></table></div></section>';
