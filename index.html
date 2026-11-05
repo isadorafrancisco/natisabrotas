@@ -179,6 +179,9 @@ tr.open .caret{transform:rotate(90deg)}
 b.neg{color:var(--bad)}
 .drop{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;border:2px dashed var(--line-strong);border-radius:16px;padding:24px 16px;background:var(--surface-2);cursor:pointer;color:var(--muted)}
 .imp-map{margin:0 0 4px}.imp-map summary{cursor:pointer;font-size:13px;color:var(--muted);padding:4px 0}.imp-tb td,.imp-tb th{white-space:nowrap}.imp-tb td.clip{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.fbar{display:flex;height:8px;border-radius:99px;background:var(--neutral-bg);overflow:hidden;margin-top:8px;min-width:120px}.fbar i{display:block;height:100%}.fbar i.r{background:var(--ok)}.fbar i.p{background:var(--accent)}
+.fbar-leg{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:12.5px;color:var(--muted)}.fbar-leg span{display:inline-flex;align-items:center;gap:6px}.fbar-leg i{width:10px;height:10px;border-radius:3px;display:inline-block}.fbar-leg i.r{background:var(--ok)}.fbar-leg i.p{background:var(--accent)}.fbar-leg i.f{background:var(--neutral-bg);border:1px solid var(--line-strong)}.fbar-leg b{margin-left:auto;color:var(--fg)}
+tfoot td{border-top:2px solid var(--line-strong);padding:12px 14px}
 .drop:hover,.drop.on{border-color:var(--primary);background:var(--primary-soft)}
 .drop b{color:var(--fg)}
 .lrow .tick{margin-top:0}
@@ -314,7 +317,7 @@ b.neg{color:var(--bad)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 body{margin:0}</style>
 </head><body><div id="app" class="app"></div>
-<script src="vendor/supabase.js"></script><script src="vendor/chart.umd.js"></script><script src="config.js"></script>
+<script src="vendor/supabase.js"></script><script src="config.js"></script>
 <script>
 'use strict';
 /* ================= utilidades ================= */
@@ -343,9 +346,6 @@ function addKids(el, kids) {
   }
 }
 const ICONS = {
-  geral: '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',
-  familia: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
-  controle: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 15h3"/>',
   painel: '<path d="M3 3v18h18"/><path d="M8 17v-5"/><path d="M13 17V8"/><path d="M18 17v-9"/>',
   editais: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
   agenda: '<rect x="3" y="4" width="5" height="14" rx="1"/><rect x="10" y="4" width="5" height="9" rx="1"/><rect x="17" y="4" width="4" height="11" rx="1"/>',
@@ -353,6 +353,7 @@ const ICONS = {
   cidades: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   custos: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  financeiro: '<path d="M3 8h15a3 3 0 0 1 3 3v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 8l11-4v4"/><circle cx="16.5" cy="14.5" r="1.2"/>',
   fechamento: '<path d="M9 4H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.5" width="6" height="3.5" rx="1"/><path d="M9 13.5l2 2 4-4.5"/>',
   clip: '<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>',
   upload: '<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
@@ -421,11 +422,10 @@ const ETIQUETAS = { 'Captação': 'info', 'Triagem': 'viol', 'Orçamento': 'warn
 const DEFAULT_PREM = { salMin: 1621, insalPct: 0.2, encargos: 0.36, inss: 0.22, dias: 21, horas: 8, rateioNatisa: 0.5, aliquota: 0.053, margem: 0.15, piso: 0.10 };
 
 /* ================= estado e banco ================= */
-const COLS = ['editais', 'clientes', 'tarefas', 'cidades', 'funcionarios', 'equipamentos', 'custosfixos', 'orcamentos', 'contratos', 'medicoes', 'gastos', 'pendencias', 'arquivos', 'abastecimentos', 'oficina', 'producao', 'contas'];
+const COLS = ['editais', 'clientes', 'tarefas', 'cidades', 'funcionarios', 'equipamentos', 'custosfixos', 'orcamentos', 'contratos', 'medicoes', 'gastos', 'pendencias', 'arquivos'];
 const S = {
   db: null, dl: null, loaded: new Set(), ready: false,
-  data: { editais: [], clientes: [], tarefas: [], cidades: [], funcionarios: [], equipamentos: [], custosfixos: [], orcamentos: [], contratos: [], medicoes: [], gastos: [], pendencias: [], arquivos: [], abastecimentos: [], oficina: [], producao: [], contas: [] },
-  ctl: null,
+  data: { editais: [], clientes: [], tarefas: [], cidades: [], funcionarios: [], equipamentos: [], custosfixos: [], orcamentos: [], contratos: [], medicoes: [], gastos: [], pendencias: [], arquivos: [] },
   files: null, email: '', fechId: null,
   prem: Object.assign({}, DEFAULT_PREM), premSaved: false,
   route: 'painel',
@@ -436,6 +436,7 @@ const S = {
     ag: { semana: weekStart(todayISO()), modo: 'dia', resp: '' },
     custosTab: 'resumo',
     fech: { q: '', status: '', empresa: '', aba: 'resumo', up: null, cat: 'Contrato' },
+    fin: { status: '', empresa: '' },
     orc: null
   }
 };
@@ -752,69 +753,6 @@ function goalCard(label, atual, meta, o) {
 }
 function kpi(label, value, sub) { return h('div', { class: 'card kpi' }, h('span', { class: 'kpi-l' }, label), h('span', { class: 'kpi-v' }, value), h('span', { class: 'kpi-s' }, sub || ' ')); }
 
-function painelResumo(today) {
-  const box = h('div');
-  const head = (t, sub, rota, rotulo) => h('div', { class: 'ph', style: { marginTop: '26px', marginBottom: '12px' } }, h('div', null, h('div', { class: 'sec-t', style: { margin: 0 } }, t), sub ? h('p', { class: 'cell-s', style: { margin: '2px 0 0' } }, sub) : null), h('div', { class: 'ph-act' }, btn(rotulo, { sm: true, onclick: () => go(rota) })));
-  /* financeiro */
-  let F = null; try { F = viewControle.financeiro(); } catch (e) { console.error(e); }
-  if (F) {
-    const { cur, prev } = F, vv = (a, b) => b ? (a >= b ? '↑ ' : '↓ ') + Math.abs(Math.round((a - b) / b * 100)) + '% sobre o mês anterior' : 'sem mês anterior para comparar';
-    box.append(head('Financeiro de ' + F.mes, 'Contratos, empresa e família somados', 'geral', 'Abrir Financeiro geral'));
-    box.append(h('div', { class: 'band' },
-      kpi('Gastamos no mês', brl(cur.gasto), vv(cur.gasto, prev.gasto)),
-      kpi('Falta pagar', brl(cur.aPagar), 'já pago em contas ' + brl(cur.pago)),
-      kpi('Vencido', brl(F.vencido), F.vencidoN ? F.vencidoN + ' conta(s) atrasada(s)' : 'nada atrasado'),
-      kpi('Receita dos contratos', brl(cur.receita), 'pelos m² lançados'),
-      kpi('Sobra depois de tudo', brl(F.sobra), 'receita menos todos os gastos'),
-      kpi('Família no mês', brl(cur.familia), 'falta pagar ' + brl(sum(cur.rows.filter(r => r.tipo === 'familia'), r => r.aPagar)))));
-    const orig = [['Contratos', cur.contratos], ['Empresa', cur.empresa], ['Família', cur.familia]];
-    const ser = F.serie.map(x => [x.l, x.gasto]);
-    box.append(h('div', { class: 'grid g-2', style: { marginTop: '16px' } },
-      h('div', { class: 'card card-p' }, h('h3', null, 'Quem gastou no mês'), h('p', { class: 'sub' }, 'Contratos, empresa e família'), cur.gasto ? barList(orig, Math.max(1, ...orig.map(x => x[1])), null, v => brl(v)) : h('p', { class: 'cell-s', style: { marginTop: '12px' } }, 'Ainda sem gastos neste mês.'),
-        h('h3', { style: { marginTop: '18px' } }, 'Gasto dos últimos 6 meses'), barList(ser, Math.max(1, ...ser.map(x => x[1])), null, v => brl(v))),
-      h('div', { class: 'card card-p' }, h('h3', null, 'Próximas contas a pagar'), h('p', { class: 'sub' }, 'Nos próximos 14 dias, de todos os donos'),
-        F.prox.length ? F.prox.map(b => h('div', { class: 'lrow', style: { cursor: 'pointer' }, role: 'button', tabindex: '0', onclick: () => go('geral'), onkeydown: ev => { if (ev.key === 'Enter') go('geral'); } },
-          h('div', { class: 'd' }, b.venc.slice(8, 10), h('small', null, MES3[+b.venc.slice(5, 7) - 1])),
-          h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { class: 'cell-t' }, b.cat), h('div', { class: 'cell-s' }, b.dono === 'familia' ? 'Família' : b.dono === 'contrato' ? 'Contrato' : 'Empresa')),
-          h('b', { class: 'tnum' }, brl(b.valor)), b.late ? pill('Vencida', 'bad') : null))
-          : h('p', { class: 'cell-s', style: { marginTop: '12px' } }, 'Nenhuma conta com valor e vencimento nos próximos 14 dias.'))));
-  }
-  /* contratos */
-  const ctr = S.data.contratos, ativos = ctr.filter(c => c.status === 'Em execução'), st = ativos.map(c => ({ c, f: fechStats(c) }));
-  box.append(head('Contratos', ativos.length + (ativos.length === 1 ? ' em execução' : ' em execução') + ' de ' + ctr.length + ' no total', 'fechamento', 'Abrir Contratos'));
-  box.append(h('div', { class: 'band' },
-    kpi('Em execução', ativos.length, ctr.length - ativos.length + ' encerrado(s) ou parado(s)'),
-    kpi('Valor contratado', brl(sum(ativos, c => c.valorContratado)), 'soma dos ativos'),
-    kpi('Faturado', brl(sum(st, x => x.f.faturado)), 'medições emitidas'),
-    kpi('A receber', brl(sum(st, x => x.f.aReceber)), 'faturado e ainda não recebido'),
-    kpi('Em atraso', brl(sum(st, x => x.f.atrasado)), 'medições vencidas'),
-    kpi('Resultado dos contratos', brl(sum(st, x => x.f.resultado)), 'faturado menos imposto e custo')));
-  if (st.length) box.append(h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'tbl-wrap' }, h('table', null,
-    h('thead', null, h('tr', null, ['Contrato', 'Contratado', 'Faturado', 'A receber', 'Custo orçado', 'Custo real', 'Resultado'].map((t, i) => h('th', { class: i ? 'r' : '' }, t)))),
-    h('tbody', null, st.map(({ c, f }) => h('tr', { class: 'row', onclick: () => go('fechamento/' + c.id) }, h('td', null, h('div', { class: 'cell-t' }, c.numeroContrato || c.numeroEdital || 'Contrato'), h('div', { class: 'cell-s' }, c.orgao || '')),
-      h('td', { class: 'r' }, brl(c.valorContratado)), h('td', { class: 'r' }, brl(f.faturado)), h('td', { class: 'r' }, brl(f.aReceber)), h('td', { class: 'r' }, f.custoOrc != null ? brl(f.custoOrc) : '—'), h('td', { class: 'r' }, brl(f.custoReal)), h('td', { class: 'r' }, brl(f.resultado)))))))));
-  /* licitações e orçamentos */
-  const semOrc = S.data.editais.filter(e => e.decisao === 'Participar' && !e.resultado && !S.data.orcamentos.some(o => o.editalId === e.id));
-  const abertos = S.data.editais.filter(e => !e.resultado && e.decisao !== 'Descartar');
-  const comOrc = S.data.orcamentos.filter(o => o.editalId);
-  box.append(head('Licitações e orçamentos', null, 'editais', 'Abrir Editais'));
-  box.append(h('div', { class: 'band' },
-    kpi('Editais em aberto', abertos.length, 'sem resultado e não descartados'),
-    kpi('Participando sem orçamento', semOrc.length, semOrc.length ? 'abra o edital e monte o orçamento' : 'todos orçados'),
-    kpi('Orçamentos salvos', S.data.orcamentos.length, comOrc.length + ' ligados a um edital'),
-    kpi('Preço-alvo em orçamentos', brl(sum(comOrc.filter(o => abertos.some(e => e.id === o.editalId)), o => o.res && o.res.alvo)), 'dos editais em aberto'),
-    kpi('Sessões em 7 dias', S.data.editais.filter(e => e.dataSessao && e.dataSessao >= today && e.dataSessao <= addDays(today, 7) && !e.resultado && e.decisao !== 'Descartar').length, 'confira a agenda'),
-    kpi('Tarefas abertas', S.data.tarefas.filter(t => t.status !== 'done').length, 'na agenda semanal')));
-  /* cadastros */
-  const nat = S.data.funcionarios;
-  box.append(head('Equipe, equipamentos e clientes', null, 'custos', 'Abrir Equipe e custos'));
-  box.append(h('div', { class: 'band' },
-    kpi('Funcionários', nat.length, brl(sum(nat, f => funcCusto(f).total)) + ' de custo mensal'),
-    kpi('Equipamentos', S.data.equipamentos.length, brl(sum(S.data.equipamentos, e => equipCusto(e).mensal)) + ' de custo mensal'),
-    kpi('Clientes', S.data.clientes.length, sum(S.data.clientes, c => (c.abordagens || []).length) + ' abordagens registradas'),
-    kpi('Cidades', S.data.cidades.length, 'cadastradas')));
-  return box;
-}
 function viewPainel() {
   const f = S.ui.painel, today = todayISO();
   const ws = weekStart(today), we = addDays(ws, 6);
@@ -847,7 +785,7 @@ function viewPainel() {
     h('div', { class: 'hero-in' },
       h('p', { class: 'hero-eyebrow' }, 'Semana de ' + fmtS(ws) + ' a ' + fmtS(we)),
       h('h1', null, 'Licitações da semana, ', h('em', null, 'tudo sob controle')),
-      h('p', { class: 'hero-sub' }, 'Licitações, contratos, orçamentos e todo o financeiro (contratos, empresa e família) resumidos em uma tela só.'),
+      h('p', { class: 'hero-sub' }, 'Capte, decida, orce e acompanhe cada edital em um só lugar, com a rotina do Renato e os custos das duas empresas.'),
       h('div', { class: 'hero-chips' },
         h('span', { class: 'hero-chip' }, h('b', null, edW.length), edW.length === 1 ? ' captado na semana' : ' captados na semana'),
         h('span', { class: 'hero-chip' }, h('b', null, prox7.length), prox7.length === 1 ? ' sessão nos próximos 7 dias' : ' sessões nos próximos 7 dias'),
@@ -866,9 +804,8 @@ function viewPainel() {
     goalCard('Tarefas atrasadas', atrasadas.length, 0, { zero: true }),
     goalCard('Resultados sem registro', semReg.length, 0, { zero: true })));
 
-  root.append(painelResumo(today));
   const fb = h('div', { class: 'ph', style: { marginTop: '26px', marginBottom: '12px' } },
-    h('div', { class: 'sec-t', style: { margin: 0 } }, 'Licitações: visão geral'),
+    h('div', { class: 'sec-t', style: { margin: 0 } }, 'Visão geral'),
     h('div', { class: 'ph-act' },
       h('label', { class: 'fld' }, sel(EMP, f.empresa, 'Todas as empresas', { 'aria-label': 'Empresa', onchange: ev => { f.empresa = ev.target.value; render(); } })),
       h('label', { class: 'fld' }, sel(anos, f.ano, 'Todos os anos', { 'aria-label': 'Ano', onchange: ev => { f.ano = ev.target.value; render(); } }))));
@@ -1013,15 +950,15 @@ function detalheEdital(e) {
       dd('Vencedor', venc), dd('Diferença para o vencedor', dif == null ? null : (dif >= 0 ? '+' : '') + pct(dif, 1)),
       dd('Contato do vencedor', e.contatoVencedor),
       dd('O que o edital exige', e.exigencias, true), dd('Observações', e.obs, true)),
-    e.decisao === 'Descartar' ? null : h('div', { style: { marginTop: '18px' } }, h('div', { class: 'sec-t', style: { marginTop: 0 } }, 'Orçamento deste edital'), h('p', { class: 'cell-s', style: { margin: '0 0 10px' } }, 'Escolha quem e o que entra na equipe, a duração e os extras. O sistema calcula o preço mínimo e o preço-alvo. Salve para guardar neste edital.'), orcDoEdital(e)),
     h('div', { class: 'dact' },
       btn('Editar', { icon: 'edit', sm: true, onclick: () => editEdital(e) }),
+      btn('Orçar', { icon: 'custos', sm: true, onclick: () => orcarEdital(e) }),
       btn('Criar checklist na agenda', { icon: 'agenda', sm: true, onclick: () => criarChecklistEdital(e) }),
-      isWin(e) ? btn(S.data.contratos.some(c => c.editalId === e.id) ? 'Ver contrato' : 'Abrir contrato', { icon: 'fechamento', sm: true, kind: 'primary', onclick: () => abrirFechamento(e) }) : null,
+      isWin(e) ? btn(S.data.contratos.some(c => c.editalId === e.id) ? 'Ver fechamento' : 'Abrir fechamento', { icon: 'fechamento', sm: true, kind: 'primary', onclick: () => abrirFechamento(e) }) : null,
       btn('Excluir', { icon: 'trash', sm: true, kind: 'danger', onclick: () => excluirEdital(e) })));
 }
 async function excluirEdital(e) {
-  if (S.data.contratos.some(c => c.editalId === e.id)) { toast('Este edital tem um contrato aberto. Exclua o contrato antes.', 'bad'); return; }
+  if (S.data.contratos.some(c => c.editalId === e.id)) { toast('Este edital tem um fechamento de licitação. Exclua o fechamento antes.', 'bad'); return; }
   if (await askConfirm({ title: 'Excluir edital', text: 'Excluir "' + (e.numero || e.objeto || e.orgao || 'edital') + '"? Os cartões da agenda ligados a ele continuam.', yes: 'Excluir', danger: true })) { await dbDelete('editais', e.id); toast('Edital excluído'); }
 }
 function exportEditais() {
@@ -1035,7 +972,7 @@ const MODELO_EDITAL = [
   { t: 'Triagem: decidir participar, descartar ou acompanhar e registrar o motivo', base: 'cap', off: 2, etq: 'Triagem', resp: 'Renato' },
   { t: 'Conferir documentos e certidões da empresa escolhida', base: 'ses', off: -7, etq: 'Proposta', resp: 'Renato' },
   { t: 'Pedir orçamento de insumos e confirmar equipe e equipamentos', base: 'ses', off: -7, etq: 'Orçamento', resp: 'Renato' },
-  { t: 'Montar o preço no orçamento do edital', base: 'ses', off: -5, etq: 'Orçamento', resp: 'Renato' },
+  { t: 'Montar o preço em Custos e orçamento', base: 'ses', off: -5, etq: 'Orçamento', resp: 'Renato' },
   { t: 'Aprovar o preço mínimo e o lance máximo com o sócio', base: 'ses', off: -4, etq: 'Orçamento', resp: 'Sócio' },
   { t: 'Montar proposta e anexos', base: 'ses', off: -3, etq: 'Proposta', resp: 'Renato' },
   { t: 'Cadastrar a proposta no portal', base: 'ses', off: -1, etq: 'Proposta', resp: 'Renato' },
@@ -1511,24 +1448,11 @@ function funcCusto(f) {
   const total = base + enc + (+f.alimTransp || 0) + (+f.epi || 0);
   return { base: base, enc: enc, total: total, hora: total / (p.dias * p.horas) };
 }
-/* Gastos reais dos últimos 90 dias (lançados no Controle de gastos), em média por mês. Sem lançamentos: null. */
-function equipReal(e) {
-  const n = norm(e.nome), td = todayISO(), ini = addDays(td, -90);
-  const f = S.data.abastecimentos.filter(x => norm(x.maquina) === n && x.data >= ini && x.data <= td);
-  const o = S.data.oficina.filter(x => norm(x.maquina) === n && x.data >= ini && x.data <= td);
-  const all = f.concat(o); if (!all.length) return null;
-  const first = all.reduce((m, x) => x.data < m ? x.data : m, td);
-  const meses = Math.min(3, Math.max(1, (diffDays(td, first) + 1) / 30));
-  return { comb: sum(f, x => x.valor) / meses, ofi: sum(o, x => x.valor) / meses, litros: sum(f, x => x.litros) / meses, meses: meses };
-}
 function equipCusto(e) {
   const res = e.residual == null ? 0.1 : e.residual;
   const dep = e.vidaUtil > 0 ? (+e.valorCompra || 0) * (1 - res) / e.vidaUtil : 0;
-  const real = equipReal(e);
-  const comb = real && real.comb > 0 ? real.comb : (+e.combustivel || 0);
-  const manut = real && real.ofi > 0 ? real.ofi : (+e.manutencao || 0);
-  const mensal = dep + manut + comb + (+e.seguro || 0);
-  return { dep: dep, mensal: mensal, hora: e.horasUso > 0 ? mensal / e.horasUso : null, real: real, comb: comb, manut: manut, combReal: !!(real && real.comb > 0), manutReal: !!(real && real.ofi > 0) };
+  const mensal = dep + (+e.manutencao || 0) + (+e.combustivel || 0) + (+e.seguro || 0);
+  return { dep: dep, mensal: mensal, hora: e.horasUso > 0 ? mensal / e.horasUso : null };
 }
 const empPill = e => e === 'Compartilhado' ? pill('Compartilhado', 'info') : pill(e || '—', empKind(e));
 const SPEC_FUNC = {
@@ -1537,8 +1461,7 @@ const SPEC_FUNC = {
   fields: [{ k: 'nome', label: 'Nome *', type: 'text', req: true }, { k: 'funcao', label: 'Função', type: 'text' },
     { k: 'empresa', label: 'Empresa', type: 'select', opts: EMP_CUSTO, blank: undefined }, { k: 'salario', label: 'Salário base (R$) *', type: 'number', req: true },
     { k: 'alimTransp', label: 'Alimentação e transporte (R$ por mês)', type: 'number' }, { k: 'epi', label: 'EPIs e uniformes (R$ por mês)', type: 'number' },
-    { k: 'insalubridade', label: 'Recebe adicional de insalubridade', type: 'check' },
-    { k: 'ppr', label: 'PPR (R$ por mês)', type: 'number', hint: 'Usado no Controle de gastos' }, { k: 'pctContrato', label: '% do tempo no contrato de roçada', type: 'pct', hint: 'Vazio = 100% para Natisa, 0% para os demais' }],
+    { k: 'insalubridade', label: 'Recebe adicional de insalubridade', type: 'check' }],
   cols: [{ h: 'Nome', f: r => [h('span', { class: 'cell-t' }, r.nome), exTag(r), r.funcao ? h('div', { class: 'cell-s' }, r.funcao) : null] }, { h: 'Empresa', f: r => empPill(r.empresa) },
     { h: 'Salário base', r: true, f: r => brl(r.salario, true) }, { h: 'Custo mensal', r: true, f: r => brl(funcCusto(r).total, true) }, { h: 'Custo por hora', r: true, f: r => brl(funcCusto(r).hora, true) }],
   footer: rows => h('tr', null, h('td', { colspan: 3, style: { fontWeight: 700 } }, 'Total mensal das pessoas'), h('td', { class: 'r', style: { fontWeight: 700 } }, brl(sum(rows, r => funcCusto(r).total), true)), h('td'))
@@ -1549,11 +1472,10 @@ const SPEC_EQUIP = {
   fields: [{ k: 'nome', label: 'Item *', type: 'text', req: true }, { k: 'empresa', label: 'Empresa', type: 'select', opts: EMP_CUSTO, blank: undefined },
     { k: 'valorCompra', label: 'Valor de compra (R$)', type: 'number' }, { k: 'vidaUtil', label: 'Vida útil (meses)', type: 'number' },
     { k: 'residual', label: 'Valor residual (%)', type: 'pct' }, { k: 'horasUso', label: 'Horas de uso por mês', type: 'number', hint: 'Para calcular o custo por hora' },
-    { k: 'manutencao', label: 'Manutenção (R$ por mês)', type: 'number', hint: 'Estimativa. Com notas de oficina lançadas, vale a média real dos últimos 90 dias.' }, { k: 'combustivel', label: 'Combustível (R$ por mês)', type: 'number', hint: 'Estimativa. Com abastecimentos lançados, vale a média real dos últimos 90 dias.' },
-    { k: 'seguro', label: 'Seguro, IPVA e licenciamento (R$ por mês)', type: 'number' },
-    { k: 'tipoComb', label: 'Combustível da máquina', type: 'select', opts: ['Gasolina', 'Diesel', 'Mistura (gasolina + óleo 2T)', 'Elétrica', 'Outro'], blank: 'Não aparece no Controle de gastos', hint: 'Escolha para a máquina aparecer em Lançar e Máquinas, no Controle de gastos.' }],
+    { k: 'manutencao', label: 'Manutenção (R$ por mês)', type: 'number' }, { k: 'combustivel', label: 'Combustível (R$ por mês)', type: 'number' },
+    { k: 'seguro', label: 'Seguro, IPVA e licenciamento (R$ por mês)', type: 'number' }],
   cols: [{ h: 'Item', f: r => [h('span', { class: 'cell-t' }, r.nome), exTag(r)] }, { h: 'Empresa', f: r => empPill(r.empresa) }, { h: 'Valor de compra', r: true, f: r => brl(r.valorCompra, true) },
-    { h: 'Custo mensal', r: true, f: r => { const c = equipCusto(r); return [brl(c.mensal, true), c.combReal || c.manutReal ? h('div', { class: 'cell-s', title: 'Combustível e/ou oficina vêm da média dos últimos 90 dias lançados no Controle de gastos' }, 'com gastos reais') : null]; } }, { h: 'Horas por mês', r: true, f: r => r.horasUso || '—' }, { h: 'Custo por hora', r: true, f: r => brl(equipCusto(r).hora, true) }],
+    { h: 'Custo mensal', r: true, f: r => brl(equipCusto(r).mensal, true) }, { h: 'Horas por mês', r: true, f: r => r.horasUso || '—' }, { h: 'Custo por hora', r: true, f: r => brl(equipCusto(r).hora, true) }],
   footer: rows => h('tr', null, h('td', { colspan: 3, style: { fontWeight: 700 } }, 'Total mensal dos equipamentos'), h('td', { class: 'r', style: { fontWeight: 700 } }, brl(sum(rows, r => equipCusto(r).mensal), true)), h('td'), h('td'))
 };
 const SPEC_FIXOS = {
@@ -1658,15 +1580,11 @@ function calcOrc(o) {
   else v = { k: 'bad', t: 'Não cabe: o valor estimado não cobre o custo.' };
   return { mensal: mensal, direto: direto, indir: indir, custo: custo, alvo: alvo, minimo: minimo, equil: equil, est: est, margemEst: margemEst, v: v, mesesN: +o.meses || 0 };
 }
-function orcInicial(e) {
-  const salvo = S.data.orcamentos.filter(x => x.editalId === e.id).sort((x, y) => (y.atualizadoEm || 0) - (x.atualizadoEm || 0))[0];
-  if (salvo) return Object.assign(newOrc(), salvo, { id: salvo.id });
-  return Object.assign(newOrc(), { editalId: e.id, empresa: e.empresa && e.empresa !== 'Nenhuma' ? e.empresa : '', objeto: e.objeto || '', valorEstimado: e.valorEstimado, nome: (e.numero ? e.numero + ' · ' : '') + (e.orgao || '') });
+function orcarEdital(e) {
+  S.ui.orc = Object.assign(newOrc(), { editalId: e.id, empresa: e.empresa && e.empresa !== 'Nenhuma' ? e.empresa : '', objeto: e.objeto || '', valorEstimado: e.valorEstimado, nome: (e.numero ? e.numero + ' · ' : '') + (e.orgao || '') });
+  S.ui.custosTab = 'orcamento'; go('custos');
 }
-function orcarEdital(e) { S.ui.orc = orcInicial(e); S.ui.custosTab = 'orcamento'; go('custos'); }
-function orcDoEdital(e) { if (!S.ui.orc || S.ui.orc.editalId !== e.id) S.ui.orc = orcInicial(e); return viewOrcamento({ edital: e }); }
-function viewOrcamento(opts) {
-  const emb = opts && opts.edital;
+function viewOrcamento() {
   if (!S.ui.orc) S.ui.orc = newOrc();
   const o = S.ui.orc, res = h('div', { class: 'card orc-res' });
   function paintRes() {
@@ -1693,7 +1611,7 @@ function viewOrcamento(opts) {
         btn('Salvar orçamento', { kind: 'primary', onclick: () => salvarOrc(o, calcOrc(o)) }),
         o.editalId && r.custo ? btn('Usar preço-alvo no edital', { onclick: () => usarNoEdital(o.editalId, r.alvo) }) : null,
         o.editalId && r.custo ? btn('Usar preço mínimo', { onclick: () => usarNoEdital(o.editalId, r.minimo) }) : null,
-        emb ? null : btn('Limpar', { kind: 'ghost', onclick: () => { S.ui.orc = newOrc(); render(); } })));
+        btn('Limpar', { kind: 'ghost', onclick: () => { S.ui.orc = newOrc(); render(); } })));
   }
   const bind = (k, el, num) => { el.addEventListener('input', () => { o[k] = num ? (el.value === '' ? null : parseFloat(el.value)) : el.value; paintRes(); }); return el; };
   const edSel = sel(S.data.editais.map(e => ({ v: e.id, l: (e.numero ? e.numero + ' · ' : '') + (e.orgao || 'Sem órgão') })), o.editalId, 'Orçamento avulso (sem edital)');
@@ -1713,7 +1631,7 @@ function viewOrcamento(opts) {
   });
   const nomeIn = bind('nome', inp('text', o.nome, { placeholder: 'Ex.: 014/2026 · Prefeitura Exemplo' }));
   const form = h('div', { class: 'card card-p', style: { display: 'flex', flexDirection: 'column', gap: '16px' } },
-    emb ? null : fld('Edital', edSel),
+    fld('Edital', edSel),
     h('div', { class: 'row2' }, fld('Nome do orçamento', nomeIn), fld('Empresa responsável', bind('empresa', sel(EMP, o.empresa, '—')))),
     fld('Objeto', bind('objeto', inp('text', o.objeto))),
     h('div', { class: 'row3' }, fld('Valor estimado pelo órgão (R$)', bind('valorEstimado', inp('number', o.valorEstimado, { min: '0' }), true)), fld('Duração (meses)', bind('meses', inp('number', o.meses, { min: '1', step: '1' }), true)), fld('Equipes necessárias', bind('equipes', inp('number', o.equipes, { min: '1', step: '1' }), true))),
@@ -1724,7 +1642,6 @@ function viewOrcamento(opts) {
     h('div', { class: 'row2' }, fld('Custos extras do edital, no total (R$)', bind('extras', inp('number', o.extras, { min: '0' }), true), h('span', { class: 'fld-h' }, 'Visita técnica, seguro-garantia, materiais, mobilização.')),
       fld('Custos indiretos (% do custo direto)', bind('indireto', inp('number', o.indireto, { min: '0' }), true), h('span', { class: 'fld-h' }, 'Estrutura e administrativo atribuídos a este contrato.'))));
   paintRes();
-  if (emb) return h('div', { class: 'orc' }, form, res);
   const saved = S.data.orcamentos.slice().sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0));
   return h('div', null,
     h('div', { class: 'orc' }, form, res),
@@ -1749,9 +1666,9 @@ async function usarNoEdital(id, valor) {
 
 function viewCustos() {
   const t = S.ui.custosTab;
-  const tabs = [['resumo', 'Resumo'], ['orcamento', 'Orçamentos por edital'], ['equipe', 'Equipe'], ['equip', 'Equipamentos e veículos'], ['fixos', 'Custos fixos'], ['prem', 'Premissas']];
+  const tabs = [['resumo', 'Resumo'], ['orcamento', 'Orçamento do edital'], ['equipe', 'Equipe'], ['equip', 'Equipamentos e veículos'], ['fixos', 'Custos fixos'], ['prem', 'Premissas']];
   const root = h('div');
-  root.append(pageHead('Equipe e custos', 'Equipe, equipamentos, custos fixos e premissas. O orçamento de cada edital fica dentro do próprio edital.'));
+  root.append(pageHead('Custos e orçamento', 'Custo operacional das duas empresas e o preço mínimo de cada edital'));
   root.append(h('div', { class: 'tabs', role: 'tablist' }, tabs.map(x => h('button', { class: 'tab', role: 'tab', 'aria-selected': String(t === x[0]), onclick: () => { S.ui.custosTab = x[0]; render(); } }, x[1]))));
   if (t === 'resumo') root.append(viewResumoCustos());
   else if (t === 'orcamento') root.append(viewOrcamento());
@@ -1782,6 +1699,7 @@ function medSit(m) {
   if (m.previsao && m.previsao < todayISO()) return 'Atrasado';
   return 'A receber';
 }
+const medAtrasada = m => (m.valorRecebido || 0) < (m.valorFaturado || 0) - 0.005 && !!m.previsao && m.previsao < todayISO();
 const sitKind = s => ({ 'Recebido': 'ok', 'Parcial': 'info', 'Atrasado': 'bad', 'A receber': 'warn' })[s] || '';
 function orcDoContrato(c) {
   const l = S.data.orcamentos.filter(o => o.editalId && o.editalId === c.editalId && o.res && o.res.custo);
@@ -1799,7 +1717,7 @@ function fechStats(c) {
   const med = S.data.medicoes.filter(m => m.contratoId === c.id);
   const gas = S.data.gastos.filter(g => g.contratoId === c.id);
   const faturado = sum(med, m => m.valorFaturado), recebido = sum(med, m => m.valorRecebido);
-  const atrasado = sum(med.filter(m => medSit(m) === 'Atrasado'), m => (m.valorFaturado || 0) - (m.valorRecebido || 0));
+  const atrasado = sum(med.filter(medAtrasada), m => (m.valorFaturado || 0) - (m.valorRecebido || 0));
   const custoReal = sum(gas, g => g.valor);
   const orc = orcDoContrato(c);
   const aliq = S.prem.aliquota || 0;
@@ -1825,20 +1743,20 @@ async function criarFechamento(e) {
 }
 async function abrirFechamento(e) {
   let c = S.data.contratos.find(x => x.editalId === e.id);
-  if (!c) { const id = await criarFechamento(e); toast('Contrato aberto. Complete os dados do contrato.'); S.ui.fech.aba = 'dados'; go('fechamento/' + id); return; }
+  if (!c) { const id = await criarFechamento(e); toast('Fechamento aberto. Complete os dados do contrato.'); S.ui.fech.aba = 'dados'; go('fechamento/' + id); return; }
   go('fechamento/' + c.id);
 }
 function novoFechamento() {
   const livres = S.data.editais.filter(e => isWin(e) && !S.data.contratos.some(c => c.editalId === e.id));
   if (!livres.length) {
-    openModal({ title: 'Novo contrato', size: 'sm', body: [h('p', null, 'Não há edital ganho esperando contrato. Na tela Editais, marque o resultado do edital como Atendido (ganhamos) e depois abra o fechamento por lá ou por aqui.')],
+    openModal({ title: 'Novo fechamento', size: 'sm', body: [h('p', null, 'Não há edital ganho esperando fechamento. Na tela Editais, marque o resultado do edital como Atendido (ganhamos) e depois abra o fechamento por lá ou por aqui.')],
       footer: [h('button', { class: 'btn', onclick: closeModal }, 'Fechar'), h('button', { class: 'btn primary', onclick: () => { closeModal(); go('editais'); } }, 'Ir para Editais')] });
     return;
   }
   const s = sel(livres.map(e => ({ v: e.id, l: (e.numero ? e.numero + ' · ' : '') + (e.orgao || 'Sem órgão') + (e.valorProposto ? ' · ' + brl(e.valorProposto) : '') })), livres[0].id);
-  openModal({ title: 'Novo contrato', size: 'sm', body: [h('p', { class: 'cell-s', style: { marginBottom: '10px' } }, 'Escolha o edital que ganhamos. Os dados dele já vêm para o fechamento.'), fld('Edital ganho', s)],
+  openModal({ title: 'Novo fechamento', size: 'sm', body: [h('p', { class: 'cell-s', style: { marginBottom: '10px' } }, 'Escolha o edital que ganhamos. Os dados dele já vêm para o fechamento.'), fld('Edital ganho', s)],
     footer: [h('button', { class: 'btn', onclick: closeModal }, 'Cancelar'),
-      h('button', { class: 'btn primary', onclick: async () => { const e = byId('editais', s.value); closeModal(); if (e) abrirFechamento(e); } }, 'Abrir contrato')] });
+      h('button', { class: 'btn primary', onclick: async () => { const e = byId('editais', s.value); closeModal(); if (e) abrirFechamento(e); } }, 'Abrir fechamento')] });
 }
 
 /* ---------- lista ---------- */
@@ -1849,10 +1767,10 @@ function viewFechamento() {
   const st = all.map(c => ({ c, s: fechStats(c), v: vigenciaInfo(c) }));
   const ativos = st.filter(x => x.c.status === 'Em execução');
   const root = h('div');
-  root.append(pageHead('Contratos', all.length + (all.length === 1 ? ' contrato' : ' contratos') + ': tudo de cada licitação ganha em um lugar só',
-    btn('Novo contrato', { kind: 'primary', icon: 'plus', onclick: novoFechamento })));
+  root.append(pageHead('Fechamento de licitações', all.length + (all.length === 1 ? ' contrato' : ' contratos') + ': tudo de cada licitação ganha em um lugar só',
+    btn('Novo fechamento', { kind: 'primary', icon: 'plus', onclick: novoFechamento })));
   if (!all.length) {
-    root.append(h('div', { class: 'card' }, emptyState('Nenhum contrato ainda', 'Quando ganharmos um edital, abra o contrato dele aqui (ou pelo botão "Abrir contrato" no edital ganho). Cada contrato reúne dados, financeiro, custos, pendências e documentos.', btn('Novo contrato', { kind: 'primary', icon: 'plus', onclick: novoFechamento }))));
+    root.append(h('div', { class: 'card' }, emptyState('Nenhuma licitação fechada ainda', 'Quando ganharmos um edital, abra o fechamento dele aqui (ou pelo botão "Abrir fechamento" no edital ganho). Cada contrato reúne dados, financeiro, custos, pendências e documentos.', btn('Novo fechamento', { kind: 'primary', icon: 'plus', onclick: novoFechamento }))));
     return root;
   }
   root.append(h('div', { class: 'band' },
@@ -1897,7 +1815,7 @@ function viewContrato(c) {
   const root = h('div');
   root.append(h('button', { class: 'btn ghost sm', style: { marginBottom: '8px', paddingLeft: '4px' }, onclick: () => go('fechamento') }, icon('back', 15), 'Todos os fechamentos'));
   root.append(pageHead(c.orgao || 'Contrato', c.objeto || '',
-    [btn('Editar dados', { icon: 'edit', onclick: () => editarContrato(c) }), btn('Excluir contrato', { icon: 'trash', kind: 'danger', onclick: () => excluirContrato(c) })]));
+    [btn('Editar dados', { icon: 'edit', onclick: () => editarContrato(c) }), btn('Excluir fechamento', { icon: 'trash', kind: 'danger', onclick: () => excluirContrato(c) })]));
   root.append(h('div', { class: 'chips', style: { marginTop: '-6px' } },
     c.empresa ? pill(c.empresa, empKind(c.empresa)) : null, pill(c.status, statusKind(c.status)), pill(v.txt, v.kind),
     c.numeroContrato ? pill('Contrato ' + c.numeroContrato, 'info') : null, c.numeroEdital ? pill('Edital ' + c.numeroEdital) : null, exTag(c)));
@@ -1908,11 +1826,11 @@ function viewContrato(c) {
 }
 async function excluirContrato(c) {
   const n = S.data.medicoes.filter(x => x.contratoId === c.id).length + S.data.gastos.filter(x => x.contratoId === c.id).length + S.data.pendencias.filter(x => x.contratoId === c.id).length + S.data.arquivos.filter(x => x.contratoId === c.id).length;
-  if (!await askConfirm({ title: 'Excluir contrato', text: 'Excluir o contrato de "' + (c.orgao || 'contrato') + '"? ' + (n ? 'Isso apaga também ' + n + ' registros ligados a ele (medições, custos, pendências e documentos). ' : '') + 'O edital continua na tela Editais.', yes: 'Excluir', danger: true })) return;
+  if (!await askConfirm({ title: 'Excluir fechamento', text: 'Excluir o fechamento de "' + (c.orgao || 'contrato') + '"? ' + (n ? 'Isso apaga também ' + n + ' registros ligados a ele (medições, custos, pendências e documentos). ' : '') + 'O edital continua na tela Editais.', yes: 'Excluir', danger: true })) return;
   const arqs = S.data.arquivos.filter(a => a.contratoId === c.id);
   if (arqs.length && S.files) { try { await S.files.remove(arqs.map(a => a.path)); } catch (e) { toast('Não foi possível apagar os arquivos: ' + e.message, 'bad'); return; } }
   for (const col of ['medicoes', 'gastos', 'pendencias', 'arquivos']) for (const r of S.data[col].filter(x => x.contratoId === c.id)) await dbDelete(col, r.id);
-  await dbDelete('contratos', c.id); toast('Contrato excluído'); go('fechamento');
+  await dbDelete('contratos', c.id); toast('Fechamento excluído'); go('fechamento');
 }
 
 /* ---------- aba Resumo ---------- */
@@ -1962,7 +1880,6 @@ const SPEC_CONTRATO = {
     { k: 'numeroContrato', label: 'Número do contrato', type: 'text' },
     { k: 'status', label: 'Situação', type: 'select', opts: STATUS_CONTRATO, blank: undefined },
     { k: 'valorContratado', label: 'Valor do contrato (R$)', type: 'number' },
-    { k: 'precoM2', label: 'Valor pago por m² (R$)', type: 'number', hint: 'Só para contratos de roçada: usado no Controle de gastos para calcular a receita.' },
     { k: 'meses', label: 'Duração (meses)', type: 'number', step: '1', hint: 'Com o início da vigência, o fim é calculado se estiver vazio.' },
     { k: 'dataAssinatura', label: 'Data de assinatura', type: 'date' },
     { k: 'ordemServico', label: 'Ordem de serviço', type: 'date' },
@@ -2033,6 +1950,8 @@ function tabFin(c, s) {
       fk('Recebido', brl(s.recebido), ' ', s.recebido > 0 ? 'ok' : ''),
       fk('A receber', brl(s.aReceber), s.atrasado > 0 ? brl(s.atrasado) + ' em atraso' : ' ', s.atrasado > 0 ? 'bad' : s.aReceber > 0 ? 'warn' : ''),
       fk('A faturar', brl(s.aFaturar), 'saldo do contrato')),
+    (() => { const k = saldoContrato(c, s); return h('div', { class: 'card card-p', style: { marginTop: '14px' } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'baseline' } }, h('h3', null, 'Saldo do contrato'), h('span', { class: 'cell-s' }, c.valorContratado ? 'Recebido ' + brl(s.recebido) + ' de ' + brl(c.valorContratado) + ' · ' + pct(Math.min(1, s.recebido / c.valorContratado), 0) : 'Informe o valor do contrato em Dados do contrato')), fbar(c, s),
+      h('div', { class: 'fbar-leg', style: { padding: '8px 0 0' } }, h('span', null, h('i', { class: 'r' }), 'Recebido ' + brl(s.recebido)), h('span', null, h('i', { class: 'p' }), 'Faturado e não pago ' + brl(k.pendente)), h('span', null, h('i', { class: 'f' }), 'Ainda a faturar ' + brl(k.aFaturar)), h('b', null, 'Falta receber ' + brl(k.falta)))); })(),
     s.faturado > (c.valorContratado || Infinity) + 0.005 ? h('div', { class: 'banner', style: { marginTop: '14px' } }, 'Atenção: o total faturado passou do valor do contrato (' + brl(s.faturado - c.valorContratado) + ' a mais). Confira se há aditivo.') : null,
     h('div', { class: 'card', style: { marginTop: '16px' } },
       h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Medições e recebimentos'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), btn('Nova medição', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specMedicao(c), null) })),
@@ -2062,7 +1981,7 @@ function tabCustos(c, s) {
       fk('Faturado', brl(s.faturado), 'imposto estimado ' + brl(s.imposto) + ' (' + pct(s.aliq, 1) + ')'),
       fk('Resultado', s.faturado ? brl(s.resultado) : '—', s.margem == null ? 'sem faturamento ainda' : 'margem de ' + pct(s.margem, 1), s.faturado ? tone(s.resultado) : ''),
       fk('Resultado por real gasto', s.custoReal ? fmtN(s.resultado / s.custoReal, 2) : '—', 'lucro para cada R$ 1 de custo')),
-    consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Equipe e custos)'),
+    consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Custos e orçamento)'),
       h('div', { class: 'bar ' + (consumo > 1 ? 'bad' : consumo > 0.85 ? 'warn' : 'ok'), style: { margin: '10px 0 6px' } }, h('i', { style: { width: Math.min(100, consumo * 100) + '%' } })),
       h('div', { class: 'cell-s' }, brl(s.custoReal) + ' de ' + brl(s.custoOrc) + (consumo > 1 ? ': passou do orçado' : ''))) : null,
     cats.length ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custos por categoria'), barList(cats.map(x => [x[0], x[1]]), cm, '', v => brl(v))) : null,
@@ -2168,6 +2087,84 @@ function tabDocs(c) {
         h('td', { class: 'r nw' }, h('div', { class: 'dact', style: { margin: 0, justifyContent: 'flex-end' } },
           btn('Abrir', { sm: true, onclick: () => abrirArquivo(a, false) }), btn('Baixar', { sm: true, icon: 'download', onclick: () => abrirArquivo(a, true) }), btn('Excluir', { sm: true, kind: 'danger', icon: 'trash', aria: 'Excluir ' + a.nome, onclick: () => excluirArquivo(a) }))))))))
       : emptyState('Nenhum documento ainda', 'Anexe o contrato assinado, a ordem de serviço, certidões, garantia, notas fiscais e o que mais precisar.')));
+}
+
+/* ================= FINANCEIRO (todos os contratos juntos) ================= */
+function saldoContrato(c, s) {
+  const total = c.valorContratado || 0;
+  const falta = total ? Math.max(0, total - s.recebido) : s.aReceber;          // quanto ainda falta entrar no contrato
+  const pendente = Math.min(s.aReceber, falta);                                  // já faturado e ainda não pago
+  return { total, falta, pendente, aFaturar: Math.max(0, falta - pendente), passou: total > 0 && s.recebido > total + 0.005 };
+}
+function fbar(c, s) {
+  const k = saldoContrato(c, s), base = k.total || Math.max(s.faturado, s.recebido) || 1;
+  const w = v => Math.min(100, Math.max(0, v / base * 100)) + '%';
+  return h('div', { class: 'fbar', role: 'img', 'aria-label': 'Recebido ' + brl(s.recebido) + ', faturado e a receber ' + brl(k.pendente) + ', ainda a faturar ' + brl(k.aFaturar) },
+    h('i', { class: 'r', style: { width: w(Math.min(s.recebido, base)) } }), h('i', { class: 'p', style: { width: w(k.pendente) } }));
+}
+function viewFinanceiro() {
+  const f = S.ui.fin;
+  const root = h('div');
+  root.append(pageHead('Financeiro', 'Cada contrato: quanto vale, quanto já entrou, quanto falta receber e quanto custou'));
+  if (!S.data.contratos.length) {
+    root.append(h('div', { class: 'card' }, emptyState('Nenhum contrato ainda', 'Quando um edital for ganho, abra o fechamento dele. Aqui aparecem, juntos, o que cada contrato vale, o que já foi recebido, o que falta receber e os custos.', btn('Ir para Fechamento', { kind: 'primary', icon: 'fechamento', onclick: () => go('fechamento') }))));
+    return root;
+  }
+  const host = h('div');
+  const upd = (k, ev) => { f[k] = ev.target.value; paint(); };
+  root.append(h('div', { class: 'card filters' },
+    fld('Situação do contrato', sel(STATUS_CONTRATO, f.status, 'Todas', { onchange: ev => upd('status', ev) })),
+    fld('Empresa', sel(EMP, f.empresa, 'Todas', { onchange: ev => upd('empresa', ev) }))), host);
+  function paint() {
+    const st = S.data.contratos.filter(c => (!f.status || c.status === f.status) && (!f.empresa || c.empresa === f.empresa))
+      .map(c => { const s = fechStats(c); return { c, s, k: saldoContrato(c, s) }; })
+      .sort((a, b) => b.k.falta - a.k.falta);
+    if (!st.length) { host.replaceChildren(h('div', { class: 'card' }, emptyState('Nenhum contrato com esses filtros', 'Mude ou limpe os filtros para ver mais.'))); return; }
+    const T = {
+      contratado: sum(st, x => x.k.total), recebido: sum(st, x => x.s.recebido), falta: sum(st, x => x.k.falta),
+      atrasado: sum(st, x => x.s.atrasado), custo: sum(st, x => x.s.custoReal), resultado: sum(st, x => x.s.resultado), faturado: sum(st, x => x.s.faturado)
+    };
+    const band = h('div', { class: 'band', style: { marginTop: '16px' } },
+      kpi('Valor dos contratos', brl(T.contratado), st.length + (st.length === 1 ? ' contrato' : ' contratos')),
+      kpi('Já recebido', brl(T.recebido), T.contratado ? pct(T.recebido / T.contratado, 0) + ' do total' : ' '),
+      kpi('Falta receber', brl(T.falta), T.atrasado > 0 ? brl(T.atrasado) + ' em atraso' : 'nada atrasado'),
+      kpi('Custos lançados', brl(T.custo), 'gasto real nos contratos'),
+      kpi('Resultado', brl(T.resultado), T.faturado > 0 ? pct(T.resultado / T.faturado, 0) + ' do faturado' : 'sem faturamento'));
+    const tbl = h('div', { class: 'card' }, h('div', { class: 'card-p' }, h('h3', null, 'Contrato por contrato'),
+      h('p', { class: 'sub' }, 'Falta receber = valor do contrato menos o que já entrou. Toque num contrato para lançar medições e recebimentos.')),
+      h('div', { class: 'tbl-wrap' }, h('table', null,
+        h('thead', null, h('tr', null, ['Contrato', 'Valor do contrato', 'Já recebido', 'Falta receber', 'Custos', 'Resultado'].map((t, i) => h('th', { class: i ? 'r' : '' }, t)))),
+        h('tbody', null, st.map(x => h('tr', { class: 'row', tabindex: '0', onclick: () => go('fechamento/' + x.c.id + '/fin'), onkeydown: ev => { if (ev.key === 'Enter') go('fechamento/' + x.c.id + '/fin'); } },
+          h('td', { style: { minWidth: '220px' } }, h('div', { class: 'cell-t' }, x.c.orgao || 'Sem órgão', exTag(x.c)), h('div', { class: 'cell-s' }, [x.c.empresa, x.c.numeroContrato ? 'Contrato ' + x.c.numeroContrato : (x.c.numeroEdital ? 'Edital ' + x.c.numeroEdital : ''), x.c.status !== 'Em execução' ? x.c.status : ''].filter(Boolean).join(' · ')), fbar(x.c, x.s)),
+          h('td', { class: 'r' }, brl(x.c.valorContratado)),
+          h('td', { class: 'r' }, h('b', { style: { color: x.s.recebido > 0 ? 'var(--ok)' : '' } }, brl(x.s.recebido))),
+          h('td', { class: 'r' }, h('b', { style: { color: x.s.atrasado > 0 ? 'var(--bad)' : '' } }, brl(x.k.falta)), x.s.atrasado > 0 ? h('div', { class: 'cell-s', style: { color: 'var(--bad)' } }, brl(x.s.atrasado) + ' em atraso') : (x.k.passou ? h('div', { class: 'cell-s' }, 'recebido passou do contrato') : null)),
+          h('td', { class: 'r' }, brl(x.s.custoReal), x.s.custoOrc ? h('div', { class: 'cell-s' }, 'orçado ' + brl(x.s.custoOrc)) : null),
+          h('td', { class: 'r' }, h('b', { style: { color: x.s.faturado > 0 ? (x.s.resultado >= 0 ? 'var(--ok)' : 'var(--bad)') : '' } }, x.s.faturado > 0 || x.s.custoReal > 0 ? brl(x.s.resultado) : '—'), x.s.margem != null ? h('div', { class: 'cell-s' }, pct(x.s.margem, 0) + ' de margem') : null)))),
+        h('tfoot', null, h('tr', null, h('td', null, h('b', null, 'Total')), h('td', { class: 'r' }, h('b', null, brl(T.contratado))), h('td', { class: 'r' }, h('b', null, brl(T.recebido))), h('td', { class: 'r' }, h('b', null, brl(T.falta))), h('td', { class: 'r' }, h('b', null, brl(T.custo))), h('td', { class: 'r' }, h('b', null, brl(T.resultado))))))),
+      h('div', { class: 'card-p fbar-leg' }, h('span', null, h('i', { class: 'r' }), 'Recebido'), h('span', null, h('i', { class: 'p' }), 'Faturado e ainda não pago'), h('span', null, h('i', { class: 'f' }), 'Ainda a faturar'),
+        h('span', { class: 'cell-s' }, 'Em ata de registro de preços o valor do contrato é o máximo: o saldo só entra conforme o órgão pede o serviço.')));
+    // próximos recebimentos
+    const ids = new Set(st.map(x => x.c.id)), cmap = {}; st.forEach(x => cmap[x.c.id] = x.c);
+    const pend = S.data.medicoes.filter(m => ids.has(m.contratoId) && medSit(m) !== 'Recebido')
+      .sort((a, b) => (a.previsao || '9999').localeCompare(b.previsao || '9999')).slice(0, 8);
+    const rec = h('div', { class: 'card card-p' }, h('h3', null, 'Próximos recebimentos'),
+      pend.length ? h('div', { class: 'list', style: { marginTop: '10px' } }, pend.map(m => {
+        const c = cmap[m.contratoId], falta = (m.valorFaturado || 0) - (m.valorRecebido || 0), sit = medSit(m);
+        return h('div', { class: 'lrow', style: { alignItems: 'center' } },
+          h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { class: 'cell-t' }, c.orgao || 'Contrato'), h('div', { class: 'cell-s' }, compLabel(m.competencia) + (m.nf ? ' · NF ' + m.nf : '') + (m.previsao ? ' · previsto ' + fmtD(m.previsao) : ' · sem previsão'))),
+          h('div', { style: { textAlign: 'right' } }, h('b', null, brl(falta)), h('div', null, medAtrasada(m) && sit === 'Parcial' ? pill('Parcial · atrasado', 'bad') : pill(sit, sitKind(sit)))),
+          h('button', { class: 'btn sm', type: 'button', onclick: () => { dbUpdate('medicoes', m.id, { dataRecebimento: todayISO(), valorRecebido: m.valorFaturado }); toast('Marcado como recebido'); } }, 'Recebi'));
+      })) : h('p', { class: 'cell-s', style: { marginTop: '10px' } }, 'Nada faturado esperando pagamento. Lance as medições na aba Financeiro de cada contrato.'));
+    // custos por categoria
+    const porCat = {}; S.data.gastos.filter(g => ids.has(g.contratoId)).forEach(g => { const k = g.categoria || 'Outros'; porCat[k] = (porCat[k] || 0) + (g.valor || 0); });
+    const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+    const cus = h('div', { class: 'card card-p' }, h('h3', null, 'Custos por categoria'),
+      cats.length ? barList(cats, cats[0][1], '', v => brl(v)) : h('p', { class: 'cell-s', style: { marginTop: '10px' } }, 'Nenhum custo lançado ainda. Lance na aba Custos e lucro de cada contrato.'));
+    host.replaceChildren(band, tbl, h('div', { class: 'row2', style: { marginTop: '16px' } }, rec, cus));
+  }
+  paint();
+  return root;
 }
 /* ================= IMPORTAR PLANILHA DE EDITAIS ================= */
 const CAMPOS_IMP = [
@@ -2540,843 +2537,13 @@ function importarEditais() {
   openModal({ title: 'Importar planilha de editais', size: 'lg', body: host, footer: foot, focus: false });
   paint();
 }
-/* ================= CONTROLE DE GASTOS (Natisa): contrato de roçada, máquinas e contas a pagar ================= */
-/* A tela é desenhada dentro de um shadow root para não misturar estilos com o resto do sistema.
-   Os dados ficam na mesma tabela `docs` do Supabase: abastecimentos, oficina, producao, contas e config/controle.
-   Funcionários vêm do cadastro que já existe em Equipe e custos > Equipe. */
-const CTLSYNC = { dirty: false };
-const viewControle = (function () {
-  const CT = { tab: 'resumo', period: '30', calY: new Date().getFullYear(), calM: new Date().getMonth(), calSel: null, lTab: 'fuel', demoOff: false, M: null, contrato: null, calView: 'geral', ftab: 'calendario', mode: '' };
-  try { CT.demoOff = localStorage.getItem('natisa_ctl_demo_off') === '1'; } catch (e) {}
-
-  /* ---------- padrões editáveis na aba Ajustes ---------- */
-  const DEF = {
-    contratoPadrao: '', fixasFam: [],
-    inicio: '2026-11-02', preco: 0.40, fgts: 0.08, tol: 0.20, t1: 1621, a1: 0.075, t2: 2902.84, a2: 0.09,
-    maquinas: [
-      { nome: 'Giro Zero 560X', comb: 'Gasolina' }, { nome: 'Kombi', comb: 'Gasolina' }, { nome: 'Caminhão F4000', comb: 'Diesel' },
-      { nome: 'Roçadeira Stihl FS221 #1', comb: 'Mistura (gasolina + óleo 2T)' }, { nome: 'Roçadeira Stihl FS221 #2', comb: 'Mistura (gasolina + óleo 2T)' },
-      { nome: 'Roçadeira Stihl FS221 #3', comb: 'Mistura (gasolina + óleo 2T)' }, { nome: 'Roçadeira Stihl FS221 #4', comb: 'Mistura (gasolina + óleo 2T)' }],
-    servicos: ['Contrato de Roçada'],
-    fixas: [
-      { nome: 'Folha (salários líquidos)', tipo: 'folha', auto: 'folha', valor: null, dia: null },
-      { nome: 'INSS (GPS/DAE)', tipo: 'impostos', auto: 'inss', valor: null, dia: 20 },
-      { nome: 'FGTS', tipo: 'impostos', auto: 'fgts', valor: null, dia: 20 },
-      { nome: 'DAS Simples Nacional', tipo: 'impostos', valor: null, dia: 20 },
-      { nome: 'Parcelamento Simples Nacional', tipo: 'impostos', valor: null, dia: null },
-      { nome: 'Água', tipo: 'agua', valor: null, dia: null }, { nome: 'Energia', tipo: 'energia', valor: null, dia: null },
-      { nome: 'Internet', tipo: 'internet', valor: null, dia: null }, { nome: 'Contador', tipo: 'contador', valor: 600, dia: null }]
-  };
-  const HOLERITES = [
-    ['Milton Ishimaru', 1794.10], ['Aguinaldo Luiz Ishimaru', 2242.28], ['Claiton José Gennari', 1794.10], ['Johny Wellington dos Santos', 1794.10],
-    ['Valmir Rosa Prado', 1794.10], ['Sidnei Aparecido Guanho', 1752.34], ['Michael Marcos de Oliveira Rando', 1794.10]];
-  const maqEquip = () => S.data.equipamentos.filter(e => e.nome && e.tipoComb && e.empresa !== 'José Renato').sort((a, b) => norm(a.nome).localeCompare(norm(b.nome))).map(e => ({ nome: e.nome, comb: e.tipoComb }));
-  const cfgRaw = () => Object.assign({}, DEF, S.ctl || {});
-  const getCfg = () => { const c = Object.assign({}, DEF, S.ctl || {}), m = maqEquip(); c.fromEquip = m.length > 0; if (m.length) c.maquinas = m; return c; };
-  /* Contratos do controle: os do Fechamento (em execução) mais, enquanto não houver um escolhido como padrão, o contrato de roçada "solto".
-     Lançamentos antigos, sem contrato, pertencem ao contrato padrão. */
-  const defContrato = cfg => (cfg.contratoPadrao && byId('contratos', cfg.contratoPadrao)) ? cfg.contratoPadrao : 'rocada';
-  const ctrNome = c => [c.numeroContrato || (c.numeroEdital ? 'Edital ' + c.numeroEdital : 'Contrato'), c.orgao].filter(Boolean).join(' · ');
-  function contratosList(cfg) {
-    const dc = defContrato(cfg), l = [];
-    if (dc === 'rocada') l.push({ id: 'rocada', nome: cfg.servicos[0] || 'Contrato de roçada', preco: cfg.preco, inicio: cfg.inicio });
-    S.data.contratos.filter(c => c.status === 'Em execução' || c.id === dc).forEach(c => l.push({ id: c.id, nome: ctrNome(c), preco: c.precoM2 != null && c.precoM2 !== '' ? +c.precoM2 : cfg.preco, inicio: c.inicioVigencia ? weekStart(c.inicioVigencia) : cfg.inicio }));
-    return l;
-  }
-  const donoTxt = r => r.dono === 'familia' ? 'Família' : r.dono === 'contrato' ? 'Contrato' : 'Empresa';
-  const TIPOS_OFI = ['Peça', 'Mão de obra', 'Lubrificante / óleo', 'Lâmina / fio de nylon', 'Pneu', 'Outro'];
-  const FTABS = [['calendario', 'Calendário'], ['fixas', 'Contas fixas'], ['avulsas', 'Contas avulsas']];
-  const TABS = [['resumo', 'Resumo'], ['contrato', 'Contrato'], ['producao', 'Produção'], ['maquinas', 'Máquinas'], ['gastos', 'Gasto total'], ['calendario', 'Calendário'], ['lanc', 'Lançamentos'], ['ajustes', 'Ajustes']];
-  const DOW3 = DIAS.map(d => d.slice(0, 3));
-
-  /* ---------- formatação ---------- */
-  const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const R = v => brl(v || 0, true), R0 = v => brl(v || 0), N0 = v => fmtN(v || 0, 0), N1 = v => (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const N2 = v => (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const PC = v => v == null ? '–' : (v * 100).toFixed(1).replace('.', ',') + '%';
-  const num = v => { let s = String(v == null ? '' : v).trim().replace(/[R$\s%]/g, ''); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); else if ((s.match(/\./g) || []).length > 1) s = s.replace(/\./g, ''); const n = parseFloat(s); return isFinite(n) ? n : 0; };
-  const inVal = v => v == null || v === '' ? '' : String(Math.round(v * 100) / 100).replace('.', ',');
-  const clone = o => JSON.parse(JSON.stringify(o));
-  const dowOf = s => (parseD(s).getDay() + 6) % 7;
-
-  /* ---------- cálculos ---------- */
-  function empCalc(f, c) {
-    const sal = +f.salario || 0, ppr = +f.ppr || 0;
-    const inss = Math.round((Math.min(sal, c.t1) * c.a1 + Math.max(0, Math.min(sal, c.t2) - c.t1) * c.a2) * 100) / 100;
-    const patr = sal * (S.prem.inss || 0.22), fgts = sal * c.fgts;
-    const custo = funcCusto(f).total + ppr;
-    const pc = f.pctContrato != null && f.pctContrato !== '' ? +f.pctContrato : (f.empresa === 'Natisa' ? 1 : 0);
-    return { f, sal, ppr, inss, patr, fgts, custo, pc, semana: custo * pc / (52 / 12), liq: sal + ppr - inss, folha: f.empresa === 'Natisa' };
-  }
-  const tipoOf = (cfg, cat) => { const x = cfg.fixas.find(y => y.nome === cat); return x ? x.tipo : 'outros'; };
-  function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-  function demoData(cfg, inicio) {
-    const r = rng(11), fuel = [], ofi = [], prod = [];
-    const nomes = cfg.maquinas.length ? cfg.maquinas.map(m => m.nome) : ['Giro Zero', 'Kombi', 'Caminhão', 'Roçadeira 1', 'Roçadeira 2'];
-    const giro = nomes.find(n => /giro/i.test(n)) || nomes[0], cam = nomes.find(n => /caminh/i.test(n)) || nomes[nomes.length > 1 ? 1 : 0];
-    const rocs = nomes.filter(n => /roçad/i.test(n)).slice(0, 2);
-    const main = cfg.servicos[0] || 'Contrato de Roçada';
-    const last = Math.floor(diffDays(todayISO(), inicio) / 7);
-    let k = 0;
-    for (let w = 0; w <= last; w++) {
-      const alto = (w === last - 2) ? 1.55 : 1;
-      for (let d = 0; d < 5; d++) {
-        const dt = addDays(inicio, 7 * w + d); if (dt > todayISO()) break;
-        prod.push({ id: 'd' + (k++), data: dt, servico: main, maquina: giro, m2: Math.round(9000 + r() * 5000) });
-        rocs.forEach(m => prod.push({ id: 'd' + (k++), data: dt, servico: main, maquina: m, m2: Math.round(1800 + r() * 1700) }));
-        if (d === 1 || d === 3) { const l = (18 + r() * 7) * alto; fuel.push({ id: 'd' + (k++), data: dt, maquina: giro, servico: main, litros: Math.round(l * 10) / 10, valor: Math.round(l * 6.45 * 100) / 100 }); }
-        if (d === 0) fuel.push({ id: 'd' + (k++), data: dt, maquina: cam, servico: main, litros: 40, valor: 234 });
-        if (d === 2 && rocs.length) { const l = 5 * alto; fuel.push({ id: 'd' + (k++), data: dt, maquina: rocs[0], servico: main, litros: l, valor: Math.round(l * 6.4 * 100) / 100 }); }
-      }
-      if (w === 1) ofi.push({ id: 'd' + (k++), data: addDays(inicio, 7 * w + 2), maquina: giro, servico: main, tipo: 'Lâmina / fio de nylon', desc: 'Troca de lâminas', valor: 180 });
-      if (w === 3) ofi.push({ id: 'd' + (k++), data: addDays(inicio, 7 * w + 1), maquina: cam, servico: main, tipo: 'Pneu', desc: 'Pneu dianteiro', valor: 650 });
-    }
-    return { fuel, ofi, prod };
-  }
-
-  function model() {
-    const cfg = getCfg(), td = todayISO();
-    const list = contratosList(cfg), dc = defContrato(cfg), ctr = list.find(x => x.id === CT.contrato) || list[0], selId = ctr.id, preco = ctr.preco;
-    const cid = r => r.contratoId || dc, mine = r => cid(r) === selId;
-    const emps = S.data.funcionarios.filter(f => f.empresa === 'Natisa' || f.empresa === 'Compartilhado').map(f => empCalc(f, cfg));
-    const funcSem = selId === dc ? sum(emps, x => x.semana) : 0;
-    const real = S.data.abastecimentos.length + S.data.oficina.length + S.data.producao.length > 0;
-    const demo = !real && !CT.demoOff && S.ready;
-    let fuel = S.data.abastecimentos, ofi = S.data.oficina, prod = S.data.producao, inicio = ctr.inicio > weekStart(td) ? weekStart(td) : ctr.inicio;
-    if (demo) { inicio = weekStart(addDays(td, -35)); const d = demoData(cfg, inicio); fuel = d.fuel; ofi = d.ofi; prod = d.prod; }
-    const wkOf = s => Math.floor(diffDays(s, inicio) / 7);
-    const nowW = Math.max(0, wkOf(td));
-    const weeks = [];
-    for (let n = 0; n <= nowW; n++) weeks.push({ n, start: addDays(inicio, 7 * n), end: addDays(inicio, 7 * n + 6), litros: 0, comb: 0, ofi: 0, m2: 0, func: funcSem });
-    fuel.forEach(f => { if (!mine(f)) return; const w = weeks[wkOf(f.data)]; if (!w) return; w.litros += +f.litros || 0; w.comb += +f.valor || 0; });
-    ofi.forEach(f => { if (!mine(f)) return; const w = weeks[wkOf(f.data)]; if (!w) return; w.ofi += +f.valor || 0; });
-    prod.forEach(f => { if (!mine(f)) return; const w = weeks[wkOf(f.data)]; if (!w) return; w.m2 += +f.m2 || 0; });
-    weeks.forEach(w => {
-      w.custo = w.func + w.comb + w.ofi; w.receita = w.m2 * preco; w.res = w.receita - w.custo;
-      w.l1000 = w.m2 ? w.litros / w.m2 * 1000 : null; w.c1000 = w.m2 ? w.comb / w.m2 * 1000 : null; w.o1000 = w.m2 ? w.ofi / w.m2 * 1000 : null; w.margem = w.receita ? w.res / w.receita : null;
-    });
-    const tot = { litros: sum(weeks, w => w.litros), comb: sum(weeks, w => w.comb), ofi: sum(weeks, w => w.ofi), m2: sum(weeks, w => w.m2), func: sum(weeks, w => w.func), custo: sum(weeks, w => w.custo), receita: sum(weeks, w => w.receita), res: sum(weeks, w => w.res) };
-    tot.l1000 = tot.m2 ? tot.litros / tot.m2 * 1000 : null; tot.o1000 = tot.m2 ? tot.ofi / tot.m2 * 1000 : null; tot.c1000 = tot.m2 ? tot.custo / tot.m2 * 1000 : null;
-    weeks.forEach(w => {
-      w.alertas = [];
-      if (w.m2 > 0 && tot.l1000 && w.l1000 > tot.l1000 * (1 + cfg.tol)) w.alertas.push('Combustível acima do esperado');
-      if (w.m2 > 0 && tot.o1000 && w.o1000 > tot.o1000 * (1 + cfg.tol) && w.ofi > 0) w.alertas.push('Oficina acima da média');
-      if (w.m2 > 0 && w.litros === 0) w.alertas.push('Sem combustível lançado');
-      if (w.m2 === 0 && (w.comb + w.ofi) > 0) w.alertas.push('Gasto sem produção lançada');
-    });
-    const cur = weeks[weeks.length - 1];
-
-    /* contas a pagar: fixas geradas por mês + avulsas */
-    const ov = {}; S.data.contas.forEach(c => { ov[c.id] = c; });
-    const folhaEmps = emps.filter(x => x.folha);
-    const autoVal = a => a === 'folha' ? sum(folhaEmps, x => x.liq) : a === 'inss' ? sum(folhaEmps, x => x.inss + x.patr) : a === 'fgts' ? sum(folhaEmps, x => x.fgts) : null;
-    const hasFolha = folhaEmps.length > 0;
-    const bills = [], st = parseD(cfg.inicio);
-    for (let k = 0; k < 14; k++) {
-      const d = new Date(st.getFullYear(), st.getMonth() + k, 1), y = d.getFullYear(), m = d.getMonth();
-      cfg.fixas.forEach((f, fi) => {
-        const id = 'fx_' + y + pad(m + 1) + '_' + fi, o = ov[id] || {};
-        const auto = f.auto && hasFolha ? autoVal(f.auto) : null;
-        const valor = o.valor !== undefined ? o.valor : (f.valor != null && f.valor !== '' ? +f.valor : auto);
-        const venc = o.venc !== undefined ? o.venc : (f.dia ? y + '-' + pad(m + 1) + '-' + pad(Math.min(+f.dia, 28)) : '');
-        const dono = f.auto ? 'contrato' : 'empresa';
-        bills.push({ id, fixed: true, cat: f.nome, tipo: f.tipo, dono, contratoId: dono === 'contrato' ? dc : '', desc: 'Conta fixa mensal', valor: valor == null ? null : +valor, venc, mes: y + '-' + pad(m + 1), status: o.status || 'Pendente', pagoEm: o.pagoEm || '' });
-      });
-      (cfg.fixasFam || []).forEach((f, fi) => {
-        const id = 'ff_' + y + pad(m + 1) + '_' + fi, o = ov[id] || {};
-        const valor = o.valor !== undefined ? o.valor : (f.valor != null && f.valor !== '' ? +f.valor : null);
-        const venc = o.venc !== undefined ? o.venc : (f.dia ? y + '-' + pad(m + 1) + '-' + pad(Math.min(+f.dia, 28)) : '');
-        bills.push({ id, fixed: true, cat: f.nome, tipo: 'familia', dono: 'familia', contratoId: '', desc: 'Conta fixa da família', valor: valor == null ? null : +valor, venc, mes: y + '-' + pad(m + 1), status: o.status || 'Pendente', pagoEm: o.pagoEm || '' });
-      });
-    }
-    S.data.contas.filter(c => c.avulso && c.venc).forEach(c => bills.push({ id: c.id, fixed: false, cat: c.cat || 'Outros', tipo: c.dono === 'familia' ? 'familia' : tipoOf(cfg, c.cat), dono: c.dono || 'empresa', contratoId: c.dono === 'contrato' ? (c.contratoId || dc) : '', desc: c.desc || '', valor: +c.valor || 0, venc: c.venc, mes: c.venc.slice(0, 7), status: c.status || 'Pendente', pagoEm: c.pagoEm || '' }));
-    const byDate = {}; bills.forEach(b => { if (b.venc) (byDate[b.venc] = byDate[b.venc] || []).push(b); });
-    const billsE = bills.filter(b => b.dono !== 'familia');
-    const ws0 = weekStart(td), we0 = addDays(ws0, 6);
-    const isOver = b => !!b.venc && b.venc < td && b.status !== 'Pago' && b.valor != null;
-    const wkBills = billsE.filter(b => b.venc >= ws0 && b.venc <= we0);
-    const payWeek = { count: wkBills.length, total: sum(wkBills, b => b.valor || 0), paid: sum(wkBills.filter(b => b.status === 'Pago'), b => b.valor || 0) };
-    payWeek.pend = payWeek.total - payWeek.paid;
-    const overdue = billsE.filter(isOver), overSum = sum(overdue, b => b.valor || 0);
-    const prox = billsE.filter(b => b.venc && b.status !== 'Pago' && b.valor != null && b.venc <= addDays(td, 14)).sort((a, b) => a.venc < b.venc ? -1 : 1);
-    const semInfo = billsE.filter(b => b.fixed && (!b.venc || b.valor == null) && b.mes <= td.slice(0, 7));
-
-    /* meses */
-    const months = [];
-    for (let k = 0; k < 14; k++) {
-      const d = new Date(st.getFullYear(), st.getMonth() + k, 1), key = d.getFullYear() + '-' + pad(d.getMonth() + 1);
-      const mo = { key, label: MES3[d.getMonth()] + '/' + String(d.getFullYear()).slice(2), folha: 0, impostos: 0, agua: 0, energia: 0, internet: 0, contador: 0, outros: 0, contrato: 0, receita: 0, cur: key === td.slice(0, 7) };
-      billsE.filter(b => b.mes === key).forEach(b => { const t = mo[b.tipo] != null ? b.tipo : 'outros'; mo[t] += b.valor || 0; });
-      fuel.forEach(f => { if ((f.data || '').slice(0, 7) === key) mo.contrato += +f.valor || 0; });
-      ofi.forEach(f => { if ((f.data || '').slice(0, 7) === key) mo.contrato += +f.valor || 0; });
-      prod.forEach(f => { if ((f.data || '').slice(0, 7) === key) mo.receita += (+f.m2 || 0) * ((list.find(x => x.id === cid(f)) || ctr).preco); });
-      mo.total = mo.folha + mo.impostos + mo.agua + mo.energia + mo.internet + mo.contador + mo.outros + mo.contrato;
-      months.push(mo);
-    }
-
-    /* máquinas e serviços no período */
-    const inP = d => CT.period === 'all' ? true : CT.period === 'sem' ? wkOf(d) === nowW : (diffDays(td, d) >= 0 && diffDays(td, d) < 30);
-    const mnames = cfg.maquinas.map(m => m.nome);
-    [fuel, ofi, prod].forEach(a => a.forEach(r => { if (r.maquina && mnames.indexOf(r.maquina) < 0) mnames.push(r.maquina); }));
-    const machines = mnames.map(nm => {
-      const mc = cfg.maquinas.find(x => x.nome === nm) || {};
-      const fl = fuel.filter(f => mine(f) && f.maquina === nm && inP(f.data)), ol = ofi.filter(f => mine(f) && f.maquina === nm && inP(f.data)), pl = prod.filter(f => mine(f) && f.maquina === nm && inP(f.data));
-      const o = { nome: nm, comb: mc.comb || '', litros: sum(fl, f => +f.litros || 0), combR: sum(fl, f => +f.valor || 0), ofiR: sum(ol, f => +f.valor || 0), m2: sum(pl, f => +f.m2 || 0) };
-      o.total = o.combR + o.ofiR; o.l1000 = o.m2 ? o.litros / o.m2 * 1000 : null; o.t1000 = o.m2 ? o.total / o.m2 * 1000 : null; o.rl = o.litros ? o.combR / o.litros : null;
-      return o;
-    });
-    const snames = cfg.servicos.slice();
-    [fuel, ofi, prod].forEach(a => a.forEach(r => { if (r.servico && snames.indexOf(r.servico) < 0) snames.push(r.servico); }));
-    const services = snames.map(nm => {
-      const fl = fuel.filter(f => f.servico === nm && inP(f.data)), ol = ofi.filter(f => f.servico === nm && inP(f.data)), pl = prod.filter(f => f.servico === nm && inP(f.data));
-      const o = { nome: nm, litros: sum(fl, f => +f.litros || 0), combR: sum(fl, f => +f.valor || 0), ofiR: sum(ol, f => +f.valor || 0), m2: sum(pl, f => +f.m2 || 0) };
-      o.total = o.combR + o.ofiR; o.t1000 = o.m2 ? o.total / o.m2 * 1000 : null; return o;
-    });
-
-    /* avisos */
-    const alerts = [];
-    if (cur && cur.alertas.length) cur.alertas.forEach(a => alerts.push({ t: 'warn', x: 'Semana atual: ' + a + '. Confira a aba Produção.' }));
-    const prev = weeks[weeks.length - 2];
-    if (prev && prev.alertas.some(a => /acima/.test(a))) alerts.push({ t: 'info', x: 'Semana passada (' + fmtS(prev.start) + '): ' + prev.alertas.filter(a => /acima/.test(a)).join(' e ').toLowerCase() + '.' });
-    if (overdue.length) alerts.push({ t: 'crit', x: overdue.length + (overdue.length > 1 ? ' contas vencidas e não pagas' : ' conta vencida e não paga') + ', somando ' + R(overSum) + '.' });
-    if (semInfo.length) alerts.push({ t: 'warn', x: semInfo.length + (semInfo.length > 1 ? ' contas fixas sem valor ou sem dia de vencimento' : ' conta fixa sem valor ou sem dia de vencimento') + '. Preencha no Calendário ou em Ajustes.' });
-    if (!emps.length) alerts.push({ t: 'info', x: 'Nenhum funcionário da Natisa cadastrado: o custo de pessoal do contrato está zerado. Veja a aba Ajustes.' });
-    if (cur && cur.m2 === 0 && dowOf(td) >= 2 && !demo) alerts.push({ t: 'info', x: 'Nenhuma produção lançada nesta semana.' });
-    if (!alerts.length) alerts.push({ t: 'good', x: 'Tudo em ordem por enquanto: sem contas vencidas e sem consumo fora do padrão.' });
-
-    return { cfg, emps, funcSem, demo, inicio, main: ctr.nome, ctr, list, dc, selId, preco, billsE, weeks, cur, tot, bills, byDate, payWeek, overdue, overSum, prox, semInfo, months, machines, services, alerts, nowW, td, ws0, we0, isOver, hasFolha };
-  }
-
-  /* ---------- gravação ---------- */
-  async function saveBill(M, id, patch) {
-    const b = M.bills.find(x => x.id === id); if (!b) return;
-    if (b.fixed) {
-      const body = Object.assign({ fixed: true, valor: b.valor, venc: b.venc, status: b.status, pagoEm: b.pagoEm }, patch);
-      await dbSave('contas', id, body);
-    } else await dbUpdate('contas', id, patch);
-  }
-  async function togglePay(M, id) {
-    const b = M.bills.find(x => x.id === id); if (!b) return;
-    try {
-      if (b.status === 'Pago') await saveBill(M, id, { status: 'Pendente', pagoEm: '' });
-      else { await saveBill(M, id, { status: 'Pago', pagoEm: todayISO() }); toast((b.cat || 'Conta') + ' marcada como paga'); }
-    } catch (e) { /* aviso já mostrado */ }
-  }
-  let cfgTimer = null;
-  function saveCfg(cfg) {
-    S.ctl = cfg; CTLSYNC.dirty = true; render();
-    if (!S.db) return;
-    clearTimeout(cfgTimer);
-    cfgTimer = setTimeout(async () => {
-      cfgTimer = null;
-      try { await S.db.doc('config/controle').set(clone(S.ctl)); } catch (e) { toast('Não foi possível salvar os ajustes.', 'bad'); }
-      CTLSYNC.dirty = false;
-    }, 500);
-  }
-  async function importarFuncionarios() {
-    const have = new Set(S.data.funcionarios.map(f => norm(f.nome)));
-    const novos = HOLERITES.filter(x => !have.has(norm(x[0])));
-    if (!novos.length) { toast('Esses funcionários já estão cadastrados.'); return; }
-    if (!await askConfirm({ title: 'Importar funcionários', text: 'Cadastrar ' + novos.length + ' funcionários da Natisa com os salários dos holerites de julho/2026 e PPR de R$ 262,85? Eles aparecem também em Equipe e custos > Equipe.', yes: 'Importar' })) return;
-    try {
-      for (const x of novos) await dbSave('funcionarios', null, { nome: x[0], funcao: '', empresa: 'Natisa', salario: x[1], ppr: 262.85, pctContrato: 1, alimTransp: 0, epi: 0, insalubridade: false, criadoEm: Date.now() });
-      toast(novos.length + ' funcionários cadastrados');
-    } catch (e) { /* aviso já mostrado */ }
-  }
-
-  async function importarMaquinas() {
-    const have = new Set(S.data.equipamentos.map(e => norm(e.nome)));
-    const novos = DEF.maquinas.filter(m => !have.has(norm(m.nome)));
-    const marcar = S.data.equipamentos.filter(e => !e.tipoComb && DEF.maquinas.some(m => norm(m.nome) === norm(e.nome)));
-    if (!novos.length && !marcar.length) { toast('As máquinas já estão cadastradas.'); return; }
-    if (!await askConfirm({ title: 'Cadastrar máquinas', text: 'Criar ' + novos.length + ' máquinas em Equipamentos e veículos (empresa Natisa) e marcar o tipo de combustível' + (marcar.length ? ' de ' + marcar.length + ' já existentes' : '') + '? Depois você completa valor de compra, horas de uso e seguro.', yes: 'Cadastrar' })) return;
-    try {
-      for (const m of novos) await dbSave('equipamentos', null, { nome: m.nome, empresa: 'Natisa', residual: 0.1, vidaUtil: 36, manutencao: 0, combustivel: 0, seguro: 0, tipoComb: m.comb, criadoEm: Date.now() });
-      for (const e of marcar) await dbUpdate('equipamentos', e.id, { tipoComb: DEF.maquinas.find(m => norm(m.nome) === norm(e.nome)).comb });
-      toast('Máquinas cadastradas em Equipamentos e veículos');
-    } catch (e) { /* aviso já mostrado */ }
-  }
-
-  /* ---------- gráficos ---------- */
-  const CH = {};
-  function chartDraw(draws, id, make) {
-    draws.push((root, cs) => {
-      if (CH[id]) { try { CH[id].destroy(); } catch (e) {} delete CH[id]; }
-      const el = root.getElementById(id); if (!el) return;
-      if (!window.Chart) { el.parentNode.innerHTML = '<div class="empty">Gráfico indisponível agora.</div>'; return; }
-      CH[id] = new Chart(el, make(cs));
-    });
-  }
-  function baseOpts(cs) {
-    const ink = cs('--muted'), grid = cs('--line');
-    return {
-      responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'bottom', labels: { color: ink, usePointStyle: true, boxWidth: 8, boxHeight: 8, font: { size: 12 } } },
-        tooltip: { callbacks: { label: c => c.dataset.label + ': ' + (c.dataset.fmt === 'n' ? N0(c.parsed.y) : c.dataset.fmt === 'l' ? N2(c.parsed.y) : R(c.parsed.y)) } } },
-      scales: { x: { ticks: { color: ink, maxRotation: 0, autoSkip: true }, grid: { display: false }, stacked: true },
-        y: { ticks: { color: ink, callback: v => R0(v) }, grid: { color: grid }, stacked: true, beginAtZero: true } }
-    };
-  }
-  const colors = cs => ({ func: cs('--info'), comb: cs('--warn'), ofi: cs('--viol'), rec: cs('--primary'), alt: cs('--lime') });
-
-  /* ---------- peças de tela ---------- */
-  const kpiH = (l, v, s, tone) => '<div class="kpi ' + (tone || '') + '"><span class="kl">' + l + '</span><strong>' + v + '</strong><span class="ks">' + (s || '') + '</span></div>';
-  const wkLabel = w => fmtS(w.start) + ' – ' + fmtS(w.end);
-  const pillRes = v => '<span class="pill ' + (v >= 0 ? 'ok' : 'bad') + '">' + (v >= 0 ? 'Lucro' : 'Prejuízo') + '</span>';
-  const emptyBox = (t, p) => '<div class="empty"><b>' + t + '</b>' + p + '</div>';
-  const billStatus = (b, M) => b.status === 'Pago' ? 'paid' : M.isOver(b) ? 'late' : 'due';
-  function proxRow(b, M) {
-    const late = M.isOver(b), d = parseD(b.venc);
-    return '<div class="row"><div class="datebadge ' + (late ? 'late' : '') + '"><b>' + pad(d.getDate()) + '</b><span>' + MES3[d.getMonth()] + '</span></div>' +
-      '<div class="grow"><b>' + E(b.cat) + '</b><span>' + (late ? 'Venceu há ' + diffDays(M.td, b.venc) + ' dia(s)' : DIAS[dowOf(b.venc)] + (b.venc === M.td ? ' (hoje)' : '')) + '</span></div>' +
-      '<b class="num">' + R(b.valor) + '</b><button class="btn sm" data-a="pay" data-id="' + b.id + '" type="button">Pagar</button></div>';
-  }
-  function billRow(b, M, showDate, noPay) {
-    const s = billStatus(b, M), paid = b.status === 'Pago';
-    return '<div class="bill ' + s + '"><div class="who"><b>' + E(b.cat) + '</b><span>' + (showDate && b.venc ? DOW3[dowOf(b.venc)] + ' ' + fmtS(b.venc) + ' · ' : '') + E(donoTxt(b)) + ' · ' + E(b.desc) + (s === 'late' ? ' · <span style="color:var(--bad);font-weight:600">vencida</span>' : '') + (paid && b.pagoEm ? ' · paga em ' + fmtS(b.pagoEm) : '') + '</span></div>' +
-      '<label>Valor (R$)<input data-bill="' + b.id + '" data-f="valor" inputmode="decimal" placeholder="0,00" value="' + inVal(b.valor) + '"></label>' +
-      '<label>Vencimento<input type="date" data-bill="' + b.id + '" data-f="venc" value="' + E(b.venc) + '"></label>' +
-      '<div class="go">' + (noPay ? '' : '<button class="btn ' + (paid ? 'ghost' : 'primary') + '" data-a="pay" data-id="' + b.id + '" type="button">' + (paid ? 'Desfazer' : 'Marcar como paga') + '</button>') + (!b.fixed ? ' <button class="btn sm danger" data-a="delbill" data-id="' + b.id + '" type="button">Excluir</button>' : '') + '</div></div>';
-  }
-  function stackedWeekly(draws, id, ws) {
-    chartDraw(draws, id, cs => { const c = colors(cs); return { type: 'bar', data: { labels: ws.map(x => fmtS(x.start)), datasets: [
-      { label: 'Funcionários', data: ws.map(x => x.func), backgroundColor: c.func, stack: 'c', borderRadius: 3 },
-      { label: 'Combustível', data: ws.map(x => x.comb), backgroundColor: c.comb, stack: 'c', borderRadius: 3 },
-      { label: 'Oficina', data: ws.map(x => x.ofi), backgroundColor: c.ofi, stack: 'c', borderRadius: 3 },
-      { type: 'line', label: 'Receita', data: ws.map(x => x.receita), borderColor: c.rec, backgroundColor: c.rec, borderWidth: 3, pointRadius: 3, tension: .25 }] }, options: baseOpts(cs) }; });
-  }
-
-  /* ---------- abas ---------- */
-  const V = {};
-  V.resumo = function (M, draws) {
-    const w = M.cur, f = w.custo || 1;
-    let h2 = '<section class="kpis">' +
-      '<div class="kpi hero"><span class="kl">Resultado da semana</span><strong>' + R0(w.res) + '</strong><span class="ks">Receita ' + R0(w.receita) + ' menos custo ' + R0(w.custo) + '</span></div>' +
-      '<div class="kpi"><span class="kl">Custo do contrato</span><strong>' + R0(w.custo) + '</strong><div class="split"><i style="width:' + (w.func / f * 100) + '%;background:var(--info)"></i><i style="width:' + (w.comb / f * 100) + '%;background:var(--warn)"></i><i style="width:' + (w.ofi / f * 100) + '%;background:var(--viol)"></i></div><span class="ks">Func. ' + R0(w.func) + ' · Comb. ' + R0(w.comb) + ' · Of. ' + R0(w.ofi) + '</span></div>' +
-      kpiH('Área roçada', N0(w.m2) + ' m²', w.l1000 != null ? N2(w.l1000) + ' L por 1.000 m²' : 'Sem consumo calculado') +
-      kpiH('A pagar nesta semana', R0(M.payWeek.pend), M.payWeek.count + ' conta(s) · já pago ' + R0(M.payWeek.paid), M.payWeek.pend > 0 ? 'warn' : '') +
-      kpiH('Vencido e não pago', R0(M.overSum), M.overdue.length ? M.overdue.length + ' conta(s) em atraso' : 'Nenhuma em atraso', M.overSum > 0 ? 'bad' : 'ok') + '</section>';
-    h2 += '<section class="grid2"><div class="card"><h3>Custo x receita por semana</h3><p class="sub">Últimas 12 semanas. Barras empilhadas são o custo; a linha é a receita (m² × ' + R(M.preco) + ').</p><div class="chart"><canvas id="c-res" role="img" aria-label="Custo e receita por semana"></canvas></div></div>' +
-      '<div class="stack"><div class="card"><h3>Atenção</h3><p class="sub">O que merece um olhar agora.</p>' + M.alerts.map(a => '<div class="alert ' + a.t + '">' + E(a.x) + '</div>').join('') + '</div>' +
-      '<div class="card"><div class="card-h"><h3>Próximos vencimentos</h3><button class="pill mute" data-a="tab" data-t="calendario" type="button">Ver calendário</button></div>' +
-      (M.prox.length ? '<div class="list">' + M.prox.slice(0, 7).map(b => proxRow(b, M)).join('') + '</div>' : emptyBox('Nada vence nos próximos 14 dias', 'Defina os dias de vencimento em Ajustes para ver as contas aqui.')) + '</div></div></section>';
-    stackedWeekly(draws, 'c-res', M.weeks.slice(-12));
-    return h2;
-  };
-  V.contrato = function (M, draws) {
-    const t = M.tot;
-    let h2 = '<p class="lead">Quanto o contrato "' + E(M.main) + '" custa e rende por semana. Funcionários entram com encargos, rateados pelo % de cada um no contrato.</p>';
-    h2 += '<section class="kpis">' + kpiH('Custo acumulado', R0(t.custo), 'Desde ' + fmtS(M.inicio)) + kpiH('Receita estimada', R0(t.receita), N0(t.m2) + ' m² × ' + R(M.preco)) +
-      kpiH('Resultado acumulado', R0(t.res), t.receita ? PC(t.res / t.receita) + ' de margem' : 'Sem receita ainda', t.res >= 0 ? 'ok' : 'bad') +
-      kpiH('Custo por 1.000 m²', t.c1000 != null ? R(t.c1000) : '–', 'Recebido por 1.000 m²: ' + R(1000 * M.preco)) + '</section>';
-    h2 += '<section class="card"><h3>Custo e receita por semana</h3><p class="sub">Últimas 26 semanas.</p><div class="chart"><canvas id="c-con" role="img" aria-label="Custo e receita por semana"></canvas></div></section>';
-    h2 += '<section class="card"><div class="card-h"><div><h3>Semana a semana</h3><p class="sub" style="margin:0">Mais recente primeiro.</p></div></div><div class="scroll"><table><thead><tr><th>Semana</th><th>Funcionários</th><th>Combustível</th><th>Oficina</th><th>Custo total</th><th>m² roçados</th><th>Receita</th><th>Resultado</th><th>Margem</th><th></th></tr></thead><tbody>' +
-      M.weeks.slice().reverse().map(w => '<tr><td>' + wkLabel(w) + (w.n === M.nowW ? ' <span class="pill mute">atual</span>' : '') + '</td><td>' + R(w.func) + '</td><td>' + R(w.comb) + '</td><td>' + R(w.ofi) + '</td><td><b>' + R(w.custo) + '</b></td><td>' + N0(w.m2) + '</td><td>' + R(w.receita) + '</td><td class="' + (w.res >= 0 ? 'pos' : 'neg') + '"><b>' + R(w.res) + '</b></td><td>' + PC(w.margem) + '</td><td>' + pillRes(w.res) + '</td></tr>').join('') +
-      '<tr class="tot"><td>Total</td><td>' + R(t.func) + '</td><td>' + R(t.comb) + '</td><td>' + R(t.ofi) + '</td><td>' + R(t.custo) + '</td><td>' + N0(t.m2) + '</td><td>' + R(t.receita) + '</td><td>' + R(t.res) + '</td><td>' + PC(t.receita ? t.res / t.receita : null) + '</td><td></td></tr></tbody></table></div>' +
-      '<p class="note">Funcionários: ' + R(M.funcSem) + ' por semana (custo mensal ÷ 4,33, vezes o % no contrato). Ajuste em Ajustes.</p></section>';
-    stackedWeekly(draws, 'c-con', M.weeks.slice(-26));
-    return h2;
-  };
-  V.producao = function (M, draws) {
-    const t = M.tot, ws = M.weeks.slice(-12);
-    let h2 = '<p class="lead">O combustível e a oficina batem com a área roçada? Cada semana é comparada com a média geral; passou de ' + Math.round(M.cfg.tol * 100) + '% acima, vira alerta.</p>';
-    h2 += '<section class="kpis">' + kpiH('Média geral de consumo', t.l1000 != null ? N2(t.l1000) + ' L' : '–', 'por 1.000 m² roçados') + kpiH('Combustível por 1.000 m²', t.m2 ? R(t.comb / t.m2 * 1000) : '–', 'média geral') + kpiH('Oficina por 1.000 m²', t.o1000 != null ? R(t.o1000) : '–', 'média geral') + kpiH('Total roçado', N0(t.m2) + ' m²', 'desde ' + fmtS(M.inicio)) + '</section>';
-    h2 += '<section class="card"><h3>Área roçada e consumo por semana</h3><p class="sub">Barras: m² roçados. Linha: litros por 1.000 m². Tracejado: média geral.</p><div class="chart"><canvas id="c-pro" role="img" aria-label="Área roçada e litros por mil metros quadrados"></canvas></div></section>';
-    h2 += '<section class="card"><h3>Semana a semana</h3><p class="sub">Semanas acima da tolerância ganham alerta.</p><div class="scroll"><table><thead><tr><th>Semana</th><th>m² roçados</th><th>Litros</th><th>Combustível</th><th>Oficina</th><th>L / 1.000 m²</th><th>Comb. R$ / 1.000 m²</th><th>Oficina R$ / 1.000 m²</th><th>Alerta</th></tr></thead><tbody>' +
-      M.weeks.slice().reverse().map(w => '<tr><td>' + wkLabel(w) + '</td><td>' + N0(w.m2) + '</td><td>' + N1(w.litros) + '</td><td>' + R(w.comb) + '</td><td>' + R(w.ofi) + '</td><td class="' + (w.alertas.some(a => /Combust.*acima/.test(a)) ? 'neg' : '') + '">' + (w.l1000 != null ? N2(w.l1000) : '–') + '</td><td>' + (w.c1000 != null ? R(w.c1000) : '–') + '</td><td>' + (w.o1000 != null ? R(w.o1000) : '–') + '</td><td>' + (w.alertas.length ? w.alertas.map(a => '<span class="pill warn">' + E(a) + '</span>').join(' ') : '<span class="pill ok">Normal</span>') + '</td></tr>').join('') + '</tbody></table></div></section>';
-    chartDraw(draws, 'c-pro', cs => {
-      const c = colors(cs), o = baseOpts(cs), ink = cs('--muted');
-      o.scales = { x: { ticks: { color: ink, maxRotation: 0 }, grid: { display: false } },
-        y: { position: 'left', beginAtZero: true, ticks: { color: ink, callback: v => N0(v) }, grid: { color: cs('--line') }, title: { display: true, text: 'm²', color: ink } },
-        y1: { position: 'right', beginAtZero: true, ticks: { color: ink, callback: v => N1(v) }, grid: { display: false }, title: { display: true, text: 'L / 1.000 m²', color: ink } } };
-      return { type: 'bar', data: { labels: ws.map(x => fmtS(x.start)), datasets: [
-        { label: 'm² roçados', fmt: 'n', data: ws.map(x => x.m2), backgroundColor: c.func, borderRadius: 4, yAxisID: 'y' },
-        { type: 'line', label: 'L / 1.000 m²', fmt: 'l', data: ws.map(x => x.l1000), borderColor: c.comb, backgroundColor: c.comb, borderWidth: 3, pointRadius: 4, tension: .2, yAxisID: 'y1', spanGaps: true },
-        { type: 'line', label: 'Média geral', fmt: 'l', data: ws.map(() => t.l1000), borderColor: ink, borderDash: [6, 5], borderWidth: 1.5, pointRadius: 0, yAxisID: 'y1' }] }, options: o };
-    });
-    return h2;
-  };
-  V.maquinas = function (M, draws) {
-    const chips = [['sem', 'Esta semana'], ['30', 'Últimos 30 dias'], ['all', 'Tudo']].map(p => '<button class="chip" data-a="period" data-p="' + p[0] + '" aria-pressed="' + (CT.period === p[0]) + '" type="button">' + p[1] + '</button>').join('');
-    const mx = Math.max(1, ...M.machines.map(m => m.total));
-    let h2 = '<div class="bar-top"><p class="lead">Combustível e oficina de cada máquina e de cada serviço. A folha não entra aqui.</p><div class="chips">' + chips + '</div></div>';
-    if (!M.machines.length) return h2 + '<section class="card">' + emptyBox('Nenhuma máquina cadastrada', 'Cadastre as máquinas na aba Ajustes.') + '</section>';
-    h2 += '<section class="grid3">' + M.machines.map(m => '<div class="card mach"><div><h3>' + E(m.nome) + '</h3><span class="sub" style="margin:0">' + E(m.comb || 'Combustível não informado') + '</span></div><div class="big">' + R(m.total) + '</div><div class="bar"><i style="width:' + (m.total / mx * 100) + '%"></i></div><div class="stats"><div>Combustível<b>' + R(m.combR) + '</b></div><div>Oficina<b>' + R(m.ofiR) + '</b></div><div>Litros<b>' + N1(m.litros) + ' L</b></div><div>Preço médio<b>' + (m.rl != null ? R(m.rl) + '/L' : '–') + '</b></div><div>Área roçada<b>' + (m.m2 ? N0(m.m2) + ' m²' : '–') + '</b></div><div>Custo por 1.000 m²<b>' + (m.t1000 != null ? R(m.t1000) : '–') + '</b></div></div></div>').join('') + '</section>';
-    h2 += '<section class="grid2"><div class="card"><h3>Gasto por máquina</h3><p class="sub">Combustível e oficina somados.</p><div class="chart sm"><canvas id="c-maq" role="img" aria-label="Gasto por máquina"></canvas></div></div>' +
-      '<div class="card"><h3>Por serviço</h3><p class="sub">No período escolhido.</p><div class="scroll"><table><thead><tr><th>Serviço</th><th>Total</th><th>m²</th><th>R$/1.000 m²</th></tr></thead><tbody>' +
-      M.services.map(s => '<tr><td>' + E(s.nome) + '</td><td>' + R(s.total) + '</td><td>' + N0(s.m2) + '</td><td>' + (s.t1000 != null ? R(s.t1000) : '–') + '</td></tr>').join('') + '</tbody></table></div></div></section>';
-    chartDraw(draws, 'c-maq', cs => { const c = colors(cs), o = baseOpts(cs), ink = cs('--muted'); o.indexAxis = 'y';
-      o.scales = { x: { stacked: true, ticks: { color: ink, callback: v => R0(v) }, grid: { color: cs('--line') } }, y: { stacked: true, ticks: { color: ink }, grid: { display: false } } };
-      return { type: 'bar', data: { labels: M.machines.map(m => m.nome), datasets: [{ label: 'Combustível', data: M.machines.map(m => m.combR), backgroundColor: c.comb, borderRadius: 3 }, { label: 'Oficina', data: M.machines.map(m => m.ofiR), backgroundColor: c.ofi, borderRadius: 3 }] }, options: o }; });
-    return h2;
-  };
-  V.gastos = function (M, draws) {
-    const cm = M.months.find(m => m.cur) || M.months[0];
-    const ci = Math.max(0, M.months.indexOf(cm)), win = M.months.slice(Math.max(0, ci - 5), ci + 3);
-    const grp = m => [m.folha, m.impostos, m.agua + m.energia + m.internet + m.contador + m.outros, m.contrato];
-    let h2 = '<p class="lead">Folha, impostos e contas vêm das contas a pagar (pelo mês da conta). Contrato é combustível + oficina; a folha já está na coluna Folha, então não conta duas vezes.</p>';
-    h2 += '<section class="kpis">' + kpiH('Gasto em ' + MESES[parseInt(cm.key.slice(5), 10) - 1], R0(cm.total), 'folha, impostos, contas e contrato') + kpiH('Folha (líquido)', R0(cm.folha), 'mês atual') + kpiH('Impostos e encargos', R0(cm.impostos), 'INSS, FGTS, DAS e parcelamento') + kpiH('Contrato', R0(cm.contrato), 'combustível + oficina') + '</section>';
-    h2 += '<section class="grid2"><div class="card"><h3>Gasto por mês</h3><p class="sub">Meses futuros mostram o previsto nas contas fixas.</p><div class="chart"><canvas id="c-gt" role="img" aria-label="Gasto por mês"></canvas></div></div><div class="card"><h3>Mês atual</h3><p class="sub">Para onde o dinheiro vai.</p><div class="chart"><canvas id="c-gt2" role="img" aria-label="Divisão do gasto do mês"></canvas></div></div></section>';
-    h2 += '<section class="card"><h3>Mês a mês</h3><p class="sub">Valores em branco nas contas fixas contam como zero até você preencher.</p><div class="scroll"><table><thead><tr><th>Mês</th><th>Folha</th><th>Impostos</th><th>Água</th><th>Energia</th><th>Internet</th><th>Contador</th><th>Outros</th><th>Contrato</th><th>Total</th><th>Receita</th><th>Resultado</th></tr></thead><tbody>' +
-      M.months.map(m => { const past = m.key <= M.td.slice(0, 7), res = m.receita - m.total; return '<tr><td>' + m.label + (m.cur ? ' <span class="pill mute">atual</span>' : '') + '</td><td>' + R(m.folha) + '</td><td>' + R(m.impostos) + '</td><td>' + R(m.agua) + '</td><td>' + R(m.energia) + '</td><td>' + R(m.internet) + '</td><td>' + R(m.contador) + '</td><td>' + R(m.outros) + '</td><td>' + R(m.contrato) + '</td><td><b>' + R(m.total) + '</b></td><td>' + (past ? R(m.receita) : '–') + '</td><td class="' + (past ? (res >= 0 ? 'pos' : 'neg') : '') + '">' + (past ? R(res) : '–') + '</td></tr>'; }).join('') + '</tbody></table></div><p class="note">Receita considera só o contrato de roçada (m² × valor por m²). Outras entradas da empresa não estão nesta tela.</p></section>';
-    chartDraw(draws, 'c-gt', cs => { const c = colors(cs); return { type: 'bar', data: { labels: win.map(m => m.label), datasets: [
-      { label: 'Folha', data: win.map(m => m.folha), backgroundColor: c.func, stack: 'g', borderRadius: 3 },
-      { label: 'Impostos e encargos', data: win.map(m => m.impostos), backgroundColor: c.comb, stack: 'g', borderRadius: 3 },
-      { label: 'Água, energia, internet, contador', data: win.map(m => grp(m)[2]), backgroundColor: c.ofi, stack: 'g', borderRadius: 3 },
-      { label: 'Contrato', data: win.map(m => m.contrato), backgroundColor: c.alt, stack: 'g', borderRadius: 3 }] }, options: baseOpts(cs) }; });
-    chartDraw(draws, 'c-gt2', cs => { const c = colors(cs); return { type: 'doughnut', data: { labels: ['Folha', 'Impostos e encargos', 'Água, energia, internet, contador', 'Contrato'], datasets: [{ data: grp(cm), backgroundColor: [c.func, c.comb, c.ofi, c.alt], borderColor: cs('--surface'), borderWidth: 2 }] },
-      options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { color: cs('--muted'), usePointStyle: true, boxWidth: 8, font: { size: 12 } } }, tooltip: { callbacks: { label: c2 => c2.label + ': ' + R(c2.parsed) } } } } }; });
-    return h2;
-  };
-  function calendarioView(M, fam) {
-    const y = CT.calY, m = CT.calM, td = M.td;
-    const view = fam ? 'familia' : CT.calView;
-    const okb = b => view === 'familia' ? b.dono === 'familia' : view === 'ctr' ? (b.dono === 'contrato' && b.contratoId === M.selId) : true;
-    const vb = M.bills.filter(okb), byD = {}; vb.forEach(b => { if (b.venc) (byD[b.venc] = byD[b.venc] || []).push(b); });
-    const first = iso(new Date(y, m, 1)), gs = weekStart(first), nd = new Date(y, m + 1, 0).getDate();
-    const rows = Math.ceil((diffDays(first, gs) + nd) / 7), key = y + '-' + pad(m + 1);
-    let sel = CT.calSel; if (!sel) sel = (td.slice(0, 7) === key) ? { t: 'day', d: td } : { t: 'week', d: weekStart(first) };
-    let h2 = '<p class="lead">' + (fam ? 'Contas pessoais da família: ficam separadas das contas da empresa e nunca entram no gasto dos contratos. ' : '') + 'O que vence em cada dia e a soma de cada semana. Toque num dia ou numa semana para ver e marcar como pago.</p>';
-    if (!fam) h2 += '<div class="chips"><button class="chip" data-a="calview" data-v="geral" aria-pressed="' + (view === 'geral') + '" type="button">Geral</button>' + M.list.map(x => '<button class="chip" data-a="calview" data-v="ctr" data-id="' + E(x.id) + '" aria-pressed="' + (view === 'ctr' && M.selId === x.id) + '" type="button">' + E(x.nome) + '</button>').join('') + '<button class="chip" data-a="calview" data-v="familia" aria-pressed="' + (view === 'familia') + '" type="button">Família</button></div>';
-    h2 += '<section class="card"><div class="cal-head"><h3 class="mes">' + MESES[m].charAt(0).toUpperCase() + MESES[m].slice(1) + ' de ' + y + '</h3><div class="chips" style="margin:0"><button class="btn sm" data-a="calnav" data-d="-1" type="button" aria-label="Mês anterior">‹</button><button class="btn sm" data-a="calnav" data-d="0" type="button">Hoje</button><button class="btn sm" data-a="calnav" data-d="1" type="button" aria-label="Próximo mês">›</button><button class="btn sm primary" data-a="lancar" data-tab="conta" type="button">+ Conta avulsa</button></div></div><div class="cal">';
-    h2 += DOW3.map(d => '<div class="dow">' + d + '</div>').join('') + '<div class="dow" style="text-align:right">Semana</div>';
-    for (let r = 0; r < rows; r++) {
-      const ws = addDays(gs, 7 * r); let wsum = 0, wpend = 0;
-      for (let c = 0; c < 7; c++) {
-        const d = addDays(ws, c), bs = byD[d] || [], out = parseD(d).getMonth() !== m;
-        bs.forEach(b => { wsum += b.valor || 0; if (b.status !== 'Pago') wpend += b.valor || 0; });
-        h2 += '<button class="day' + (out ? ' out' : '') + (d === td ? ' today' : '') + (sel.t === 'day' && sel.d === d ? ' sel' : '') + '" data-a="selday" data-d="' + d + '" type="button" aria-label="' + fmtD(d) + ', ' + bs.length + ' conta(s)"><span class="dn">' + parseD(d).getDate() + '</span>' +
-          '<span class="cchips">' + bs.slice(0, 3).map(b => '<span class="cchip ' + billStatus(b, M) + (b.dono === 'familia' ? ' fam' : b.dono === 'contrato' ? ' ctr' : '') + '">' + E(b.cat.split(' ')[0]) + (b.valor != null ? ' ' + R0(b.valor) : ' ?') + '</span>').join('') + (bs.length > 3 ? '<span class="cchip due">+' + (bs.length - 3) + ' mais</span>' : '') + '</span>' +
-          '<span class="dots">' + bs.map(b => '<i class="' + billStatus(b, M) + '"></i>').join('') + '</span></button>';
-      }
-      h2 += '<button class="wk' + (sel.t === 'week' && sel.d === ws ? ' sel' : '') + '" data-a="selweek" data-d="' + ws + '" type="button" aria-label="Semana de ' + fmtS(ws) + '"><span>' + fmtS(ws) + '</span><b>' + (wsum ? R0(wsum) : '–') + '</b><span>' + (wpend ? R0(wpend) + ' a pagar' : wsum ? 'tudo pago' : '') + '</span></button>';
-    }
-    h2 += '</div><div class="chips" style="margin-top:12px;margin-bottom:0"><span class="pill warn">A pagar</span><span class="pill bad">Vencida</span><span class="pill ok">Paga</span></div></section>';
-    let list = [], title = '';
-    if (sel.t === 'day') { list = byD[sel.d] || []; title = DIAS[dowOf(sel.d)] + ', ' + fmtD(sel.d); }
-    else { const we = addDays(sel.d, 6); list = vb.filter(b => b.venc >= sel.d && b.venc <= we).sort((a, b) => a.venc < b.venc ? -1 : 1); title = 'Semana de ' + fmtS(sel.d) + ' a ' + fmtS(we); }
-    const tot = sum(list, b => b.valor || 0), pend = sum(list.filter(b => b.status !== 'Pago'), b => b.valor || 0);
-    h2 += '<section class="card"><div class="card-h"><div><h3>' + E(title) + '</h3><p class="sub" style="margin:0">' + (list.length ? list.length + ' conta(s) · total ' + R(tot) + ' · a pagar ' + R(pend) : 'Nenhuma conta neste período.') + '</p></div>' + (sel.t === 'day' ? '<button class="btn sm" data-a="lancar" data-tab="conta" data-date="' + sel.d + '" type="button">+ Conta neste dia</button>' : '') + '</div>' +
-      (list.length ? list.map(b => billRow(b, M, sel.t === 'week')).join('') : emptyBox('Dia livre', 'Nada para pagar aqui.')) + '</section>';
-    const falta = vb.filter(b => b.fixed && b.mes === key && (!b.venc || b.valor == null));
-    if (falta.length) h2 += '<section class="card"><h3>Falta preencher neste mês</h3><p class="sub">Informe o valor e a data de vencimento para a conta entrar no calendário. Para valer em todos os meses, use Ajustes.</p>' + falta.map(b => billRow(b, M, false, true)).join('') + '</section>';
-    return h2;
-  }
-  V.calendario = M => calendarioView(M, false);
-  V.fam_calendario = M => calendarioView(M, true);
-  function ctrChips(M) {
-    if (M.list.length < 2) return '';
-    return '<div class="chips"><span class="sub" style="margin:0 6px 0 0;align-self:center">Contrato:</span>' + M.list.map(x => '<button class="chip" data-a="ctr" data-id="' + E(x.id) + '" aria-pressed="' + (M.selId === x.id) + '" type="button">' + E(x.nome) + '</button>').join('') + '</div>';
-  }
-  V.fam_fixas = function (M) {
-    const c = M.cfg;
-    return '<p class="lead">Contas que se repetem todo mês na família (escola, prestação, plano de saúde, condomínio). Entram no calendário da família no dia indicado.</p>' +
-      '<section class="card"><div class="card-h"><h3>Contas fixas da família</h3><button class="btn sm primary" data-a="addarr" data-k="fixasFam" type="button">+ Conta fixa</button></div>' +
-      ((c.fixasFam || []).length ? '<div class="scroll"><table><thead><tr><th>Conta</th><th>Valor (R$)</th><th>Dia do vencimento</th><th></th></tr></thead><tbody>' +
-        c.fixasFam.map((x, i) => '<tr><td><input class="cell-in" style="min-width:220px" data-arr="fixasFam" data-i="' + i + '" data-k="nome" value="' + E(x.nome) + '"></td><td><input class="cell-in" data-arr="fixasFam" data-i="' + i + '" data-k="valor" data-kind="numn" inputmode="decimal" value="' + inVal(x.valor) + '" placeholder="–"></td><td><input class="cell-in" style="min-width:70px" data-arr="fixasFam" data-i="' + i + '" data-k="dia" data-kind="dia" inputmode="numeric" value="' + (x.dia || '') + '" placeholder="–"></td><td><button class="btn sm danger" data-a="rmarr" data-k="fixasFam" data-i="' + i + '" type="button">Remover</button></td></tr>').join('') + '</tbody></table></div>'
-        : emptyBox('Nenhuma conta fixa ainda', 'Clique em + Conta fixa para cadastrar a primeira.')) + '<p class="note">Dias de 1 a 28. Para uma conta de um mês só, use Contas avulsas.</p></section>';
-  };
-  V.fam_avulsas = function (M) {
-    const a = S.data.contas.filter(c => c.avulso && c.dono === 'familia').sort((x, y) => (x.venc || '') < (y.venc || '') ? 1 : -1).slice(0, 80);
-    return '<p class="lead">Contas pontuais da família. Para marcar como paga, use o Calendário.</p><section class="card"><div class="card-h"><h3>Contas avulsas da família</h3><button class="btn sm primary" data-a="lancar" data-tab="conta" type="button">+ Conta avulsa</button></div>' +
-      (a.length ? '<div class="scroll"><table><thead><tr><th>Vencimento</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>' + a.map(r => '<tr><td>' + fmtD(r.venc) + '</td><td>' + E(r.cat) + '</td><td style="text-align:left">' + E(r.desc) + '</td><td>' + R(r.valor) + '</td><td>' + E(r.status || 'Pendente') + '</td><td><button class="btn sm danger" data-a="delbill" data-id="' + r.id + '" type="button">Excluir</button></td></tr>').join('') + '</tbody></table></div>' : emptyBox('Nenhuma conta avulsa', 'Cadastre uma com + Conta avulsa.')) + '</section>';
-  };
-  /* tudo de um mês, por origem */
-  function aggMes(M, k) {
-    const cid = r => r.contratoId || M.dc, sumB = (l, f) => sum(l.filter(f || (() => true)), b => b.valor || 0);
-      const inM = x => (x.data || '').slice(0, 7) === k;
-      const bm = M.bills.filter(b => b.mes === k), fuel = S.data.abastecimentos.filter(inM), ofi = S.data.oficina.filter(inM), prod = S.data.producao.filter(inM);
-      const rows = M.list.map(c => {
-        const cb = bm.filter(b => b.dono === 'contrato' && b.contratoId === c.id);
-        const comb = sum(fuel.filter(r => cid(r) === c.id), r => +r.valor || 0), of = sum(ofi.filter(r => cid(r) === c.id), r => +r.valor || 0);
-        const rec = sum(prod.filter(r => cid(r) === c.id), r => (+r.m2 || 0) * c.preco), contas = sumB(cb);
-        return { nome: c.nome, tipo: 'contrato', contas, comb, of, rec, gasto: contas + comb + of, aPagar: sumB(cb, b => b.status !== 'Pago') };
-      });
-      const e = bm.filter(b => b.dono === 'empresa'), f = bm.filter(b => b.dono === 'familia');
-      rows.push({ nome: 'Empresa (contas gerais)', tipo: 'empresa', contas: sumB(e), comb: 0, of: 0, rec: 0, gasto: sumB(e), aPagar: sumB(e, b => b.status !== 'Pago') });
-      rows.push({ nome: 'Família', tipo: 'familia', contas: sumB(f), comb: 0, of: 0, rec: 0, gasto: sumB(f), aPagar: sumB(f, b => b.status !== 'Pago') });
-      const cats = {}; bm.forEach(b => { const n = (b.dono === 'familia' ? 'Família · ' : '') + b.cat; cats[n] = (cats[n] || 0) + (b.valor || 0); });
-      const cm = sum(fuel, r => +r.valor || 0), om = sum(ofi, r => +r.valor || 0); if (cm) cats['Combustível'] = cm; if (om) cats['Oficina'] = om;
-      return { rows, bm, cats, gasto: sum(rows, r => r.gasto), aPagar: sum(rows, r => r.aPagar), receita: sum(rows, r => r.rec), pago: sumB(bm, b => b.status === 'Pago'),
-        contratos: sum(rows.filter(r => r.tipo === 'contrato'), r => r.gasto), empresa: rows[rows.length - 2].gasto, familia: rows[rows.length - 1].gasto };
-    }
-  function financeiroResumo() {
-    const M = model(), t = new Date(), key = t.getFullYear() + '-' + pad(t.getMonth() + 1);
-    const cur = aggMes(M, key), pk = new Date(t.getFullYear(), t.getMonth() - 1, 1), prev = aggMes(M, pk.getFullYear() + '-' + pad(pk.getMonth() + 1));
-    const venc = M.bills.filter(M.isOver), serie = [];
-    for (let i = 5; i >= 0; i--) { const d = new Date(t.getFullYear(), t.getMonth() - i, 1); const g = aggMes(M, d.getFullYear() + '-' + pad(d.getMonth() + 1)); serie.push({ l: MES3[d.getMonth()], gasto: g.gasto }); }
-    const lim = addDays(M.td, 14), prox = M.bills.filter(b => b.venc && b.status !== 'Pago' && b.valor != null && b.venc <= lim).sort((a, b) => a.venc < b.venc ? -1 : 1).slice(0, 6).map(b => ({ id: b.id, cat: b.cat, valor: b.valor, venc: b.venc, dono: b.dono, late: M.isOver(b) }));
-    return { cur, prev, vencido: sum(venc, b => b.valor || 0), vencidoN: venc.length, sobra: cur.receita - cur.gasto, serie, prox, mes: MESES[t.getMonth()] + ' de ' + t.getFullYear() };
-  }
-  build.financeiro = financeiroResumo;
-  V.geral = function (M, draws) {
-    const t0 = new Date(); if (CT.gY == null) { CT.gY = t0.getFullYear(); CT.gM = t0.getMonth(); }
-    const keyOf = (y, m) => { const d = new Date(y, m, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
-    const key = keyOf(CT.gY, CT.gM), prevKey = keyOf(CT.gY, CT.gM - 1);
-    const cid = r => r.contratoId || M.dc, priceOf = id => (M.list.find(x => x.id === id) || M.ctr).preco;
-    const sumB = (l, f) => sum(l.filter(f || (() => true)), b => b.valor || 0);
-    const agg = k => aggMes(M, k);
-    const cur = agg(key), prev = agg(prevKey);
-    const venc = M.bills.filter(M.isOver), vencSum = sum(venc, b => b.valor || 0);
-    const pend = cur.bm.filter(b => b.status !== 'Pago').sort((a, b) => (a.venc || '9') < (b.venc || '9') ? -1 : 1);
-    const semValor = pend.filter(b => b.valor == null);
-    const dv = (a, b) => b ? (a - b) / b : null;
-    const varTxt = (a, b, inv) => { const v = dv(a, b); if (v == null) return '<span class="pill mute">sem base</span>'; const up = v > 0.005, dn = v < -0.005; const bad = inv ? dn : up, good = inv ? up : dn; return '<span class="pill ' + (bad ? 'warn' : good ? 'ok' : 'mute') + '">' + (up ? '↑ ' : dn ? '↓ ' : '') + Math.abs(v * 100).toFixed(0) + '%</span>'; };
-    const ks = (a, b, inv) => b ? 'Mês anterior ' + R0(b) + ' ' + varTxt(a, b, inv) : 'Sem dados no mês anterior';
-    /* últimos 6 meses */
-    const ms = []; for (let i = 5; i >= 0; i--) { const d = new Date(CT.gY, CT.gM - i, 1); ms.push({ k: keyOf(d.getFullYear(), d.getMonth()), l: MES3[d.getMonth()] + '/' + String(d.getFullYear()).slice(2) }); }
-    const hist = ms.map(x => Object.assign({ l: x.l }, agg(x.k)));
-    const media = sum(hist, x => x.gasto) / hist.length;
-    const sobraEmp = cur.receita - cur.contratos - cur.empresa, sobraFim = sobraEmp - cur.familia;
-    /* texto automático */
-    const topO = cur.rows.slice().sort((x, y) => y.gasto - x.gasto)[0];
-    const catE = Object.entries(cur.cats).sort((x, y) => y[1] - x[1]);
-    const ins = [];
-    if (cur.gasto > 0) {
-      ins.push('O maior gasto do mês é <b>' + E(topO.nome) + '</b>: ' + R0(topO.gasto) + ' (' + Math.round(topO.gasto / cur.gasto * 100) + '% do total).');
-      if (catE.length) ins.push('Por tipo de gasto, o que mais pesa é <b>' + E(catE[0][0]) + '</b> (' + R0(catE[0][1]) + ').');
-      if (prev.gasto) ins.push('Comparado com o mês anterior, o gasto total ' + (cur.gasto >= prev.gasto ? 'subiu ' : 'caiu ') + Math.abs(Math.round(dv(cur.gasto, prev.gasto) * 100)) + '% (' + R0(prev.gasto) + ' → ' + R0(cur.gasto) + ').');
-      if (media) ins.push('A média dos últimos 6 meses é ' + R0(media) + ' por mês; este mês está ' + (cur.gasto > media ? 'acima' : 'abaixo') + ' dela.');
-      if (cur.receita) ins.push('Os contratos renderam ' + R0(cur.receita) + ' no mês. Depois de pagar contratos e empresa sobram <b>' + R0(sobraEmp) + '</b>; depois da família, <b>' + R0(sobraFim) + '</b>.');
-      if (cur.familia && cur.gasto) ins.push('A família representa ' + Math.round(cur.familia / cur.gasto * 100) + '% de tudo o que se paga no mês.');
-    }
-    let h2 = '<p class="lead">Tudo junto: os contratos, a empresa e a família. Mostra quanto saiu, quanto falta pagar e como isso se compara ao mês anterior e aos últimos meses.</p>';
-    h2 += '<div class="chips"><button class="btn sm" data-a="gnav" data-d="-1" type="button" aria-label="Mês anterior">‹</button><b style="align-self:center;min-width:150px;text-align:center">' + MESES[CT.gM].charAt(0).toUpperCase() + MESES[CT.gM].slice(1) + ' de ' + CT.gY + '</b><button class="btn sm" data-a="gnav" data-d="1" type="button" aria-label="Próximo mês">›</button><button class="btn sm" data-a="gnav" data-d="0" type="button">Hoje</button></div>';
-    h2 += '<section class="kpis">' + kpiH('Gastamos no mês', R0(cur.gasto), ks(cur.gasto, prev.gasto)) + kpiH('Falta pagar no mês', R0(cur.aPagar), pend.length + ' conta(s) em aberto · já pago ' + R0(cur.pago)) +
-      kpiH('Vencido (todos os meses)', R0(vencSum), venc.length ? venc.length + ' conta(s) atrasada(s)' : 'Nada atrasado') + kpiH('Receita dos contratos', R0(cur.receita), prev.receita ? 'Mês anterior ' + R0(prev.receita) + ' ' + varTxt(cur.receita, prev.receita, true) : 'Pelos m² lançados') + '</section>';
-    h2 += '<section class="kpis">' + kpiH('Contratos', R0(cur.contratos), ks(cur.contratos, prev.contratos)) + kpiH('Empresa', R0(cur.empresa), ks(cur.empresa, prev.empresa)) + kpiH('Família', R0(cur.familia), ks(cur.familia, prev.familia)) +
-      kpiH('Sobra depois de tudo', R0(sobraFim), 'Receita ' + R0(cur.receita) + ' menos ' + R0(cur.gasto), sobraFim < 0 ? 'bad' : 'hero') + '</section>';
-    if (ins.length) h2 += '<section class="card" style="background:var(--ok-bg)"><h3>O que os números dizem</h3><ul style="margin:8px 0 0;padding-left:18px;line-height:1.6">' + ins.map(x => '<li>' + x + '</li>').join('') + '</ul></section>';
-    h2 += '<section class="grid2"><div class="card"><h3>Gasto por mês: contratos, empresa e família</h3><p class="sub">Últimos 6 meses. A linha é a receita dos contratos.</p><div class="chart"><canvas id="g-meses" role="img" aria-label="Gasto por mês por origem"></canvas></div></div>' +
-      '<div class="card"><h3>Para onde foi o dinheiro</h3><p class="sub">Gasto do mês por origem.</p><div class="chart"><canvas id="g-rosca" role="img" aria-label="Gasto do mês por origem"></canvas></div></div></section>';
-    h2 += '<section class="grid2"><div class="card"><h3>Gasto por tipo</h3><p class="sub">As 10 maiores categorias do mês.</p><div class="chart"><canvas id="g-cat" role="img" aria-label="Gasto por categoria"></canvas></div></div>' +
-      '<div class="card"><h3>Contas a pagar por semana</h3><p class="sub">O que vence em cada semana do mês: pago e em aberto.</p><div class="chart"><canvas id="g-sem" role="img" aria-label="Contas por semana"></canvas></div></div></section>';
-    h2 += '<section class="card"><h3>Cada contrato: receita × gasto</h3><p class="sub">Quanto cada contrato rendeu e custou no mês.</p><div class="chart"><canvas id="g-ctr" role="img" aria-label="Receita e gasto por contrato"></canvas></div></section>';
-    h2 += '<section class="card"><h3>Comparação com o mês anterior</h3><p class="sub">Gasto de cada origem agora e no mês passado.</p><div class="scroll"><table><thead><tr><th>Origem</th><th>Contas</th><th>Combustível</th><th>Oficina</th><th>Gasto no mês</th><th>Mês anterior</th><th>Variação</th><th>Falta pagar</th></tr></thead><tbody>' +
-      cur.rows.map((r, i) => '<tr><td>' + E(r.nome) + '</td><td>' + R(r.contas) + '</td><td>' + (r.comb ? R(r.comb) : '–') + '</td><td>' + (r.of ? R(r.of) : '–') + '</td><td><b>' + R(r.gasto) + '</b></td><td>' + R(prev.rows[i].gasto) + '</td><td>' + varTxt(r.gasto, prev.rows[i].gasto) + '</td><td>' + (r.aPagar ? R(r.aPagar) : '–') + '</td></tr>').join('') +
-      '<tr class="tot"><td>Total</td><td>' + R(sum(cur.rows, r => r.contas)) + '</td><td>' + R(sum(cur.rows, r => r.comb)) + '</td><td>' + R(sum(cur.rows, r => r.of)) + '</td><td>' + R(cur.gasto) + '</td><td>' + R(prev.gasto) + '</td><td>' + varTxt(cur.gasto, prev.gasto) + '</td><td>' + R(cur.aPagar) + '</td></tr></tbody></table></div>' +
-      '<p class="note">Combustível e oficina vêm dos lançamentos e já contam como gastos. As contas entram pelo mês do vencimento. Meses antes do início do calendário aparecem zerados.</p></section>';
-    h2 += '<section class="card"><h3>Últimos 6 meses em números</h3><div class="scroll"><table><thead><tr><th>Mês</th><th>Contratos</th><th>Empresa</th><th>Família</th><th>Gasto total</th><th>Receita</th><th>Sobra</th></tr></thead><tbody>' +
-      hist.map(x => '<tr><td>' + x.l + '</td><td>' + R(x.contratos) + '</td><td>' + R(x.empresa) + '</td><td>' + R(x.familia) + '</td><td><b>' + R(x.gasto) + '</b></td><td>' + R(x.receita) + '</td><td>' + R(x.receita - x.gasto) + '</td></tr>').join('') +
-      '<tr class="tot"><td>Média</td><td>' + R(sum(hist, x => x.contratos) / 6) + '</td><td>' + R(sum(hist, x => x.empresa) / 6) + '</td><td>' + R(sum(hist, x => x.familia) / 6) + '</td><td>' + R(media) + '</td><td>' + R(sum(hist, x => x.receita) / 6) + '</td><td>' + R(sum(hist, x => x.receita - x.gasto) / 6) + '</td></tr></tbody></table></div></section>';
-    h2 += '<section class="card"><div class="card-h"><div><h3>O que falta pagar</h3><p class="sub" style="margin:0">Em ordem de vencimento. ' + (semValor.length ? semValor.length + ' conta(s) sem valor ainda, preencha no Calendário.' : '') + '</p></div></div>' +
-      (pend.length ? pend.map(b => '<div class="row"><div class="datebadge ' + (M.isOver(b) ? 'late' : '') + '">' + (b.venc ? '<b>' + pad(parseD(b.venc).getDate()) + '</b><span>' + MES3[parseD(b.venc).getMonth()] + '</span>' : '<b>?</b><span>s/ data</span>') + '</div><div class="grow"><b>' + E(b.cat) + '</b><span>' + E(donoTxt(b)) + (b.dono === 'contrato' ? ': ' + E((M.list.find(x => x.id === b.contratoId) || {}).nome || '') : '') + (M.isOver(b) ? ' · vencida' : '') + '</span></div><b class="num">' + (b.valor != null ? R(b.valor) : '?') + '</b>' + (b.valor != null ? '<button class="btn sm" data-a="pay" data-id="' + b.id + '" type="button">Pagar</button>' : '') + '</div>').join('') : emptyBox('Tudo pago', 'Não há contas em aberto neste mês.')) + '</section>';
-
-    /* gráficos */
-    const hz = (cs, extra) => { const o = baseOpts(cs); o.scales.x.stacked = false; o.scales.y.stacked = false; return Object.assign(o, extra || {}); };
-    chartDraw(draws, 'g-meses', cs => { const o = baseOpts(cs); return { type: 'bar', data: { labels: hist.map(x => x.l), datasets: [
-      { label: 'Contratos', data: hist.map(x => x.contratos), backgroundColor: cs('--info'), stack: 's' },
-      { label: 'Empresa', data: hist.map(x => x.empresa), backgroundColor: cs('--warn'), stack: 's' },
-      { label: 'Família', data: hist.map(x => x.familia), backgroundColor: cs('--viol'), stack: 's' },
-      { type: 'line', label: 'Receita dos contratos', data: hist.map(x => x.receita), borderColor: cs('--primary'), backgroundColor: cs('--primary'), borderWidth: 2.5, pointRadius: 3, tension: .25 }] }, options: o }; });
-    chartDraw(draws, 'g-rosca', cs => { const items = cur.rows.filter(r => r.gasto > 0), ink = cs('--muted'); const pal = [cs('--info'), cs('--lime'), cs('--warn'), cs('--viol'), cs('--primary')];
-      return { type: 'doughnut', data: { labels: items.map(r => r.nome), datasets: [{ data: items.map(r => r.gasto), backgroundColor: items.map((r, i) => r.tipo === 'familia' ? cs('--viol') : r.tipo === 'empresa' ? cs('--warn') : pal[i % pal.length]), borderWidth: 0 }] },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { color: ink, usePointStyle: true, boxWidth: 8, boxHeight: 8, font: { size: 12 } } }, tooltip: { callbacks: { label: c => c.label + ': ' + R(c.parsed) + ' (' + Math.round(c.parsed / (cur.gasto || 1) * 100) + '%)' } } } } }; });
-    chartDraw(draws, 'g-cat', cs => { const top = catE.slice(0, 10), o = hz(cs, { indexAxis: 'y' }); o.plugins.legend = { display: false }; o.plugins.tooltip = { callbacks: { label: c => R(c.parsed.x) } };
-      o.scales.x.ticks.callback = v => R0(v); o.scales.y = { ticks: { color: cs('--muted') }, grid: { display: false } }; o.scales.x.grid = { color: cs('--line') };
-      return { type: 'bar', data: { labels: top.map(x => x[0]), datasets: [{ label: 'Gasto', data: top.map(x => x[1]), backgroundColor: cs('--info'), borderRadius: 4 }] }, options: o }; });
-    const wk = {}; cur.bm.forEach(b => { if (!b.venc) return; const w = weekStart(b.venc); wk[w] = wk[w] || { p: 0, a: 0 }; wk[w][b.status === 'Pago' ? 'p' : 'a'] += b.valor || 0; });
-    const wks = Object.keys(wk).sort();
-    chartDraw(draws, 'g-sem', cs => ({ type: 'bar', data: { labels: wks.map(w => fmtS(w)), datasets: [{ label: 'Pago', data: wks.map(w => wk[w].p), backgroundColor: cs('--ok') }, { label: 'Em aberto', data: wks.map(w => wk[w].a), backgroundColor: cs('--warn') }] }, options: baseOpts(cs) }));
-    chartDraw(draws, 'g-ctr', cs => { const cr = cur.rows.filter(r => r.tipo === 'contrato'), o = hz(cs); return { type: 'bar', data: { labels: cr.map(r => r.nome), datasets: [{ label: 'Receita', data: cr.map(r => r.rec), backgroundColor: cs('--primary'), borderRadius: 4 }, { label: 'Gasto', data: cr.map(r => r.gasto), backgroundColor: cs('--warn'), borderRadius: 4 }] }, options: o }; });
-    return h2;
-  };
-  V.lanc = function (M) {
-    const tabs = [['fuel', 'Abastecimentos'], ['ofi', 'Oficina'], ['prod', 'Produção'], ['conta', 'Contas avulsas']];
-    const sortD = a => a.slice().sort((x, y) => (x.data || x.venc || '') < (y.data || y.venc || '') ? 1 : -1).slice(0, 80);
-    const del = (c, id) => '<button class="btn sm danger" data-a="del" data-c="' + c + '" data-id="' + id + '" type="button">Excluir</button>';
-    let h2 = '<p class="lead">Tudo o que foi registrado. Use + Lançar para adicionar; aqui você confere e exclui.</p><div class="chips">' + tabs.map(t => '<button class="chip" data-a="ltab" data-t="' + t[0] + '" aria-pressed="' + (CT.lTab === t[0]) + '" type="button">' + t[1] + '</button>').join('') + '</div>';
-    let body = '';
-    const D = S.data;
-    if (CT.lTab === 'fuel') { const a = sortD(D.abastecimentos); body = a.length ? '<table><thead><tr><th>Data</th><th>Máquina</th><th>Serviço</th><th>Litros</th><th>Valor</th><th>R$/L</th><th></th></tr></thead><tbody>' + a.map(r => '<tr><td>' + fmtD(r.data) + '</td><td>' + E(r.maquina) + '</td><td>' + E(r.servico) + '</td><td>' + N1(r.litros) + '</td><td>' + R(r.valor) + '</td><td>' + (r.litros ? R(r.valor / r.litros) : '–') + '</td><td>' + del('abastecimentos', r.id) + '</td></tr>').join('') + '</tbody></table>' : emptyBox('Nenhum abastecimento ainda', 'Use + Lançar logo após abastecer.'); }
-    if (CT.lTab === 'ofi') { const a = sortD(D.oficina); body = a.length ? '<table><thead><tr><th>Data</th><th>Máquina</th><th>Serviço</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody>' + a.map(r => '<tr><td>' + fmtD(r.data) + '</td><td>' + E(r.maquina) + '</td><td>' + E(r.servico) + '</td><td>' + E(r.tipo) + '</td><td style="text-align:left">' + E(r.desc) + '</td><td>' + R(r.valor) + '</td><td>' + del('oficina', r.id) + '</td></tr>').join('') + '</tbody></table>' : emptyBox('Nenhum serviço de oficina ainda', 'Lance cada nota da oficina por máquina.'); }
-    if (CT.lTab === 'prod') { const a = sortD(D.producao); body = a.length ? '<table><thead><tr><th>Data</th><th>Serviço</th><th>Máquina</th><th>Área (m²)</th><th>Local</th><th></th></tr></thead><tbody>' + a.map(r => '<tr><td>' + fmtD(r.data) + '</td><td>' + E(r.servico) + '</td><td>' + E(r.maquina) + '</td><td>' + N0(r.m2) + '</td><td style="text-align:left">' + E(r.local) + '</td><td>' + del('producao', r.id) + '</td></tr>').join('') + '</tbody></table>' : emptyBox('Nenhuma produção ainda', 'Lance os m² roçados de cada dia, uma linha por máquina.'); }
-    if (CT.lTab === 'conta') { const a = sortD(D.contas.filter(c => c.avulso)); body = a.length ? '<table><thead><tr><th>Vencimento</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>' + a.map(r => '<tr><td>' + fmtD(r.venc) + '</td><td>' + E(r.cat) + '</td><td style="text-align:left">' + E(r.desc) + '</td><td>' + R(r.valor) + '</td><td>' + (r.status === 'Pago' ? '<span class="pill ok">Paga</span>' : '<span class="pill warn">A pagar</span>') + '</td><td>' + del('contas', r.id) + '</td></tr>').join('') + '</tbody></table>' : emptyBox('Nenhuma conta avulsa', 'Contas fixas já estão no calendário. Use + Lançar para gastos que aparecem só uma vez.'); }
-    return h2 + '<section class="card"><div class="scroll">' + body + '</div></section>';
-  };
-  V.ajustes = function (M) {
-    const c = M.cfg, E2 = M.emps;
-    let h2 = '<p class="lead">Parâmetros, máquinas, serviços e contas fixas. As alterações são salvas sozinhas.</p>';
-    h2 += '<section class="card"><h3>Parâmetros</h3><p class="sub">Números usados em todos os cálculos.</p><div class="setg">' +
-      '<label>Início da 1ª semana (segunda)<input type="date" data-cfg="inicio" data-kind="text" value="' + E(c.inicio) + '"></label>' +
-      '<label>Valor por m² do contrato avulso (R$)<input data-cfg="preco" data-kind="num" inputmode="decimal" value="' + inVal(c.preco) + '"></label>' +
-      '<label>FGTS (% do salário)<input data-cfg="fgts" data-kind="pct" inputmode="decimal" value="' + inVal(c.fgts * 100) + '"></label>' +
-      '<label>Alerta acima da média (%)<input data-cfg="tol" data-kind="pct" inputmode="decimal" value="' + inVal(c.tol * 100) + '"></label></div>' +
-      '<p class="note">O INSS patronal vem das Premissas de Equipe e custos (' + PC(S.prem.inss) + '). A tabela do INSS do empregado (7,5% até R$ 1.621 e 9% até R$ 2.902,84) reproduz os holerites de julho; confirme com o contador.</p></section>';
-    h2 += '<section class="card"><div class="card-h"><div><h3>Funcionários</h3><p class="sub" style="margin:0">Vêm do cadastro de Equipe e custos > Equipe (empresa Natisa ou Compartilhado). O custo vem das Premissas do sistema, mais o PPR de cada um.</p></div><div class="chips" style="margin:0"><button class="btn sm" data-a="importfunc" type="button">Importar dos holerites de julho</button><button class="btn sm primary" data-a="goequipe" type="button">Editar equipe</button></div></div><div class="scroll"><table><thead><tr><th>Nome</th><th>Empresa</th><th>Salário</th><th>PPR</th><th>% no contrato</th><th>Custo mensal</th><th>Custo semanal no contrato</th></tr></thead><tbody>' +
-      (E2.length ? E2.map(x => '<tr><td>' + E(x.f.nome) + '</td><td>' + E(x.f.empresa) + '</td><td>' + R(x.sal) + '</td><td>' + R(x.ppr) + '</td><td>' + Math.round(x.pc * 100) + '%</td><td>' + R(x.custo) + '</td><td>' + R(x.semana) + '</td></tr>').join('') + '<tr class="tot"><td>Total</td><td></td><td>' + R(sum(E2, x => x.sal)) + '</td><td>' + R(sum(E2, x => x.ppr)) + '</td><td></td><td>' + R(sum(E2, x => x.custo)) + '</td><td>' + R(M.funcSem) + '</td></tr>' : '<tr><td colspan="7">' + emptyBox('Nenhum funcionário da Natisa', 'Use "Importar dos holerites de julho" ou cadastre em Equipe e custos.') + '</td></tr>') + '</tbody></table></div>' +
-      '<p class="note">O % no contrato é um campo do cadastro do funcionário. Vazio vale 100% para a Natisa e 0% para os demais. A folha líquida, o INSS e o FGTS das contas a pagar consideram só quem é da Natisa.</p></section>';
-    h2 += '<section class="grid2"><div class="card"><div class="card-h"><h3>Máquinas</h3>' + (c.fromEquip ? '<button class="btn sm" data-a="goequip" type="button">Editar em Equipamentos</button>' : '<button class="btn sm primary" data-a="importmaq" type="button">Cadastrar em Equipamentos</button>') + '</div><div class="scroll"><table><thead><tr><th>Nome</th><th>Combustível</th></tr></thead><tbody>' +
-      c.maquinas.map(x => '<tr><td>' + E(x.nome) + '</td><td>' + E(x.comb) + '</td></tr>').join('') + '</tbody></table></div><p class="note">' + (c.fromEquip ? 'Esta lista vem de Equipe e custos > Equipamentos e veículos: aparece toda máquina com o campo Combustível preenchido.' : 'Lista padrão, ainda fora de Equipamentos e veículos. Clique em Cadastrar para criar essas máquinas lá (dá para ajustar valor de compra, horas e seguro) e passar a usar um cadastro só.') + '</p></div>' +
-      '<div class="card"><div class="card-h"><h3>Contratos</h3><button class="btn sm" data-a="gocontratos" type="button">Abrir Contratos</button></div><div class="scroll"><table><thead><tr><th>Contrato</th><th>R$ por m²</th></tr></thead><tbody>' +
-      M.list.map(x => '<tr><td>' + E(x.nome) + (x.id === M.dc ? ' <span class="pill mute">padrão</span>' : '') + '</td><td>' + R(x.preco) + '</td></tr>').join('') + '</tbody></table></div>' +
-      '<label class="fld" style="margin-top:12px"><span class="fld-l">Contrato padrão (recebe a folha e os lançamentos antigos)</span><select data-cfg="contratoPadrao" data-kind="text"><option value=""' + (M.dc === 'rocada' ? ' selected' : '') + '>Contrato de roçada avulso</option>' + S.data.contratos.map(k => '<option value="' + E(k.id) + '"' + (M.dc === k.id ? ' selected' : '') + '>' + E(ctrNome(k)) + '</option>').join('') + '</select></label>' +
-      (M.dc === 'rocada' ? '<label class="fld" style="margin-top:8px"><span class="fld-l">Nome do contrato avulso</span><input class="cell-in" data-arr="servicos" data-i="0" data-k="*" value="' + E(c.servicos[0] || '') + '"></label>' : '') +
-      '<p class="note">Cada contrato em execução aparece aqui sozinho. Informe o valor por m² no cadastro do contrato (campo Valor pago por m²). Quando escolher o contrato padrão, o avulso deixa de aparecer.</p></div></section>';
-    h2 += '<section class="card"><h3>Contas fixas mensais</h3><p class="sub">Cada uma entra no calendário todo mês, no dia indicado. Sem dia, fica em "Falta preencher". Valor vazio usa o cálculo automático, quando houver.</p><div class="scroll"><table><thead><tr><th>Conta</th><th>Valor estimado (R$)</th><th>Dia do vencimento</th><th>Valor automático</th></tr></thead><tbody>' +
-      c.fixas.map((x, i) => '<tr><td><input class="cell-in" style="min-width:220px" data-arr="fixas" data-i="' + i + '" data-k="nome" value="' + E(x.nome) + '"></td><td><input class="cell-in" data-arr="fixas" data-i="' + i + '" data-k="valor" data-kind="numn" inputmode="decimal" value="' + inVal(x.valor) + '" placeholder="–"></td><td><input class="cell-in" style="min-width:70px" data-arr="fixas" data-i="' + i + '" data-k="dia" data-kind="dia" inputmode="numeric" value="' + (x.dia || '') + '" placeholder="–"></td><td style="color:var(--muted)">' + (x.auto === 'folha' ? 'Salários líquidos dos funcionários' : x.auto === 'inss' ? 'INSS do empregado + patronal' : x.auto === 'fgts' ? 'FGTS dos funcionários' : '–') + '</td></tr>').join('') + '</tbody></table></div><p class="note">DAS, INSS e FGTS vêm com dia 20 como ponto de partida; confirme com o contador. Dias de 1 a 28.</p></section>';
-    return h2;
-  };
-
-  /* ---------- lançar (modal do sistema) ---------- */
-  function openLancar(tab, preset) {
-    tab = tab || 'fuel'; preset = preset || {};
-    const cfg = getCfg(), maq = cfg.maquinas.map(m => m.nome), cl = contratosList(cfg), srv = cl.map(x => x.nome), c = {};
-    const cur = (CT.M && CT.M.ctr ? CT.M.ctr.nome : srv[0]);
-    const idOf = nome => { const x = cl.find(z => z.nome === nome); return x && x.id !== 'rocada' ? x.id : ''; };
-    const err = h('div', { class: 'err', hidden: true, role: 'alert' });
-    const hint = h('div', { class: 'note' });
-    const seg = h('div', { class: 'seg', style: { marginBottom: '14px' } }, [['fuel', 'Abastecimento'], ['ofi', 'Oficina'], ['prod', 'Produção'], ['conta', 'Conta avulsa']].map(t => h('button', { type: 'button', 'aria-pressed': String(tab === t[0]), onclick: () => openLancar(t[0], {}) }, t[1])));
-    const dt = inp('date', preset.date || todayISO());
-    let fields;
-    if (tab === 'fuel') {
-      c.data = dt; c.maquina = sel(maq, preset.maquina, maq.length ? 'Escolha a máquina' : 'Cadastre em Ajustes'); c.servico = sel(srv, preset.servico || cur, srv.length ? undefined : 'Cadastre em Ajustes');
-      c.litros = inp('number', null, { min: '0', placeholder: 'Ex.: 20' }); c.valor = inp('number', null, { min: '0', placeholder: 'Ex.: 130,00' }); c.obs = inp('text', '');
-      const upd = () => { const l = +c.litros.value, v = +c.valor.value; hint.textContent = l > 0 && v > 0 ? 'Preço por litro: ' + R(v / l) : 'O preço por litro aparece aqui.'; };
-      c.litros.addEventListener('input', upd); c.valor.addEventListener('input', upd); upd();
-      fields = [h('div', { class: 'row2' }, fld('Data', c.data), fld('Máquina', c.maquina)), h('div', { class: 'row2' }, fld('Contrato', c.servico), fld('Litros', c.litros)), h('div', { class: 'row2' }, fld('Valor total (R$)', c.valor), fld('Posto ou observação', c.obs)), hint];
-    } else if (tab === 'ofi') {
-      c.data = dt; c.maquina = sel(maq, preset.maquina, maq.length ? 'Escolha a máquina' : 'Cadastre em Ajustes'); c.servico = sel(srv, preset.servico || cur, srv.length ? undefined : 'Cadastre em Ajustes');
-      c.tipo = sel(TIPOS_OFI, 'Peça'); c.desc = inp('text', '', { placeholder: 'Ex.: troca de lâminas' }); c.valor = inp('number', null, { min: '0', placeholder: 'Ex.: 180,00' }); c.obs = inp('text', '');
-      fields = [h('div', { class: 'row2' }, fld('Data', c.data), fld('Máquina', c.maquina)), h('div', { class: 'row2' }, fld('Contrato', c.servico), fld('Tipo', c.tipo)), fld('Descrição', c.desc), h('div', { class: 'row2' }, fld('Valor (R$)', c.valor), fld('Oficina ou nota', c.obs))];
-    } else if (tab === 'prod') {
-      c.data = dt; c.servico = sel(srv, preset.servico || cur, srv.length ? undefined : 'Cadastre em Ajustes'); c.maquina = sel(maq, preset.maquina, maq.length ? 'Escolha a máquina' : 'Cadastre em Ajustes');
-      c.m2 = inp('number', null, { min: '0', placeholder: 'Ex.: 12000' }); c.local = inp('text', '');
-      const upd = () => { const m = +c.m2.value; const pr = (cl.find(z => z.nome === c.servico.value) || cl[0] || { preco: cfg.preco }).preco; hint.textContent = m > 0 ? 'Receita estimada: ' + R(m * pr) + ' (' + N0(m) + ' m² × ' + R(pr) + ')' : 'Uma linha por máquina por dia. A receita estimada aparece aqui.'; };
-      c.m2.addEventListener('input', upd); c.servico.addEventListener('change', upd); upd();
-      fields = [h('div', { class: 'row2' }, fld('Data', c.data), fld('Contrato', c.servico)), h('div', { class: 'row2' }, fld('Máquina', c.maquina), fld('Área roçada (m²)', c.m2)), fld('Local ou trecho', c.local), hint];
-    } else {
-      c.venc = dt; c.cat = sel(cfg.fixas.map(x => x.nome).concat(['Outros']), 'Outros'); c.desc = inp('text', '', { placeholder: 'Ex.: pneu extra, material' }); c.valor = inp('number', null, { min: '0' }); c.status = sel(['Pendente', 'Pago'], 'Pendente');
-      const donoOpts = ['Empresa'].concat(srv.map(n => 'Contrato: ' + n), ['Família']);
-      c.dono = sel(donoOpts, preset.dono === 'familia' ? 'Família' : preset.dono === 'contrato' ? 'Contrato: ' + cur : 'Empresa');
-      fields = [h('div', { class: 'row2' }, fld('Vencimento', c.venc), fld('Categoria', c.cat)), fld('De quem é a conta', c.dono), fld('Descrição', c.desc), h('div', { class: 'row2' }, fld('Valor (R$)', c.valor), fld('Situação', c.status))];
-    }
-    const save = async again => {
-      const g = k => rd(c[k]);
-      let col, doc, msg;
-      if (tab === 'fuel') { const l = g('litros'), v = g('valor'); if (!g('data') || !g('maquina') || !g('servico') || !(l > 0) || !(v > 0)) { err.textContent = 'Preencha data, máquina, serviço, litros e valor.'; err.hidden = false; return; } col = 'abastecimentos'; doc = { data: g('data'), maquina: g('maquina'), servico: g('servico'), litros: l, valor: v, obs: g('obs') }; msg = 'Abastecimento lançado: ' + N1(l) + ' L por ' + R(v); }
-      if (tab === 'ofi') { const v = g('valor'); if (!g('data') || !g('maquina') || !g('servico') || !(v > 0)) { err.textContent = 'Preencha data, máquina, serviço e valor.'; err.hidden = false; return; } col = 'oficina'; doc = { data: g('data'), maquina: g('maquina'), servico: g('servico'), tipo: g('tipo'), desc: g('desc'), valor: v, obs: g('obs') }; msg = 'Oficina lançada: ' + R(v); }
-      if (tab === 'prod') { const m = g('m2'); if (!g('data') || !g('maquina') || !g('servico') || !(m > 0)) { err.textContent = 'Preencha data, serviço, máquina e área.'; err.hidden = false; return; } col = 'producao'; doc = { data: g('data'), servico: g('servico'), maquina: g('maquina'), m2: m, local: g('local') }; msg = 'Produção lançada: ' + N0(m) + ' m²'; }
-      if (tab === 'conta') { const v = g('valor'); if (!g('venc') || !(v > 0)) { err.textContent = 'Preencha o vencimento e o valor.'; err.hidden = false; return; } const st = g('status'); col = 'contas'; const dn = g('dono'), dono = dn === 'Família' ? 'familia' : dn.indexOf('Contrato: ') === 0 ? 'contrato' : 'empresa'; col = 'contas'; doc = { avulso: true, dono, contratoId: dono === 'contrato' ? idOf(dn.slice(10)) : '', venc: g('venc'), cat: g('cat'), desc: g('desc'), valor: v, status: st, pagoEm: st === 'Pago' ? todayISO() : '' }; msg = 'Conta lançada: ' + R(v); }
-      if (tab !== 'conta') doc.contratoId = idOf(doc.servico);
-      doc.criadoEm = Date.now();
-      try { await dbSave(col, null, doc); } catch (e) { return; }
-      toast(msg);
-      if (again) { const keep = {}; if (c.data) keep.date = c.data.value; if (c.venc) keep.date = c.venc.value; if (c.maquina) keep.maquina = c.maquina.value; if (c.servico) keep.servico = c.servico.value; openLancar(tab, keep); } else closeModal();
-    };
-    openModal({
-      title: 'Lançar', body: [seg, fields, err],
-      footer: [h('button', { class: 'btn', type: 'button', onclick: closeModal }, 'Cancelar'), h('button', { class: 'btn', type: 'button', onclick: () => save(true) }, 'Salvar e lançar outro'), h('button', { class: 'btn primary', type: 'button', onclick: () => save(false) }, 'Salvar')]
-    });
-  }
-
-  /* ---------- estilos da tela (dentro do shadow root) ---------- */
-  const CSS = `
-:host{display:block;font-family:var(--font);color:var(--fg);font-size:14px;line-height:1.45}
-*{box-sizing:border-box}
-button,input,select{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
-.ctl{display:flex;flex-direction:column;gap:16px}
-.num,td,th,.kpi strong{font-variant-numeric:tabular-nums}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin}
-.tab{border:0;background:transparent;padding:10px 14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;margin-bottom:-1px}
-.tab:hover{color:var(--fg)}
-.tab[aria-selected="true"]{color:var(--primary);border-bottom-color:var(--primary)}
-.lead{margin:0;color:var(--muted);max-width:70ch}
-.bar-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:18px 20px;min-width:0}
-.card h3{margin:0;font-family:var(--display);font-size:15px;font-weight:700}
-.card .sub,.sub{color:var(--muted);font-size:12.5px;margin:2px 0 12px}
-.card-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
-.kpi{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:4px;min-width:0;box-shadow:var(--shadow)}
-.kpi .kl{color:var(--muted);font-size:12.5px;font-weight:500}
-.kpi strong{font-family:var(--display);font-size:28px;font-weight:800;line-height:1.1;letter-spacing:-.02em}
-.kpi .ks{color:var(--muted);font-size:12px}
-.kpi.ok strong{color:var(--ok)} .kpi.bad strong{color:var(--bad)} .kpi.warn strong{color:var(--warn)}
-.kpi.hero{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));border-color:transparent;color:#fff}
-.kpi.hero .kl,.kpi.hero .ks{color:rgba(255,255,255,.8)} .kpi.hero strong{color:#fff}
-.split{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--surface-2);margin:6px 0 2px}
-.split i{display:block;height:100%}
-.grid2{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:16px}
-.grid3{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
-.chart{position:relative;height:290px} .chart.sm{height:240px}
-.pill{display:inline-flex;align-items:center;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap;border:0}
-.pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.bad{background:var(--bad-bg);color:var(--bad)} .pill.mute{background:var(--neutral-bg);color:var(--neutral)}
-button.pill{cursor:pointer}
-.scroll{overflow-x:auto}
-table{border-collapse:collapse;width:100%}
-th,td{padding:9px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
-th:first-child,td:first-child{text-align:left}
-th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
-tbody tr:hover td{background:var(--surface-2)}
-tr.tot td{font-weight:700;background:var(--surface-2)}
-td.neg{color:var(--bad)} td.pos{color:var(--ok)}
-.list{display:flex;flex-direction:column}
-.row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
-.row:last-child{border-bottom:0}
-.row .grow{flex:1;min-width:0}
-.row .grow b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row .grow span{color:var(--muted);font-size:12.5px}
-.datebadge{width:46px;flex:none;text-align:center;border-radius:10px;background:var(--surface-2);padding:4px 0;line-height:1.1}
-.datebadge b{display:block;font-family:var(--display);font-size:17px}
-.datebadge span{font-size:10.5px;text-transform:uppercase;color:var(--muted);letter-spacing:.05em}
-.datebadge.late{background:var(--bad-bg);color:var(--bad)} .datebadge.late span{color:var(--bad)}
-.alert{padding:10px 12px;border-radius:12px;margin-bottom:8px;font-size:13px}
-.alert.warn{background:var(--warn-bg);color:var(--warn)} .alert.crit{background:var(--bad-bg);color:var(--bad)} .alert.good{background:var(--ok-bg);color:var(--ok)} .alert.info{background:var(--surface-2);color:var(--muted)}
-.banner{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;border-radius:14px;background:var(--primary-soft);border:1px dashed var(--primary)}
-.chips{display:flex;gap:8px;flex-wrap:wrap}
-.chip{border:1px solid var(--line-strong);background:var(--surface);color:var(--muted);border-radius:99px;padding:6px 13px;cursor:pointer;font-weight:600;font-size:13px}
-.chip[aria-pressed="true"]{background:var(--brand);color:var(--brand-fg);border-color:var(--brand)}
-.empty{padding:26px 8px;text-align:center;color:var(--muted)}
-.empty b{display:block;color:var(--fg);font-family:var(--display);font-size:16px;margin-bottom:4px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line-strong);background:var(--surface);color:var(--fg);padding:9px 14px;border-radius:10px;cursor:pointer;font-weight:600;min-height:38px}
-.btn:hover{background:var(--surface-2)}
-.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-fg)}
-.btn.primary:hover{background:var(--primary-hover)}
-.btn.ghost{background:transparent}
-.btn.sm{padding:5px 10px;min-height:30px;font-size:12.5px;border-radius:8px}
-.btn.danger{color:var(--bad);border-color:var(--bad);background:transparent}
-.mach{display:flex;flex-direction:column;gap:8px}
-.mach .big{font-family:var(--display);font-size:26px;font-weight:800;font-variant-numeric:tabular-nums}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12.5px;color:var(--muted)}
-.stats b{display:block;color:var(--fg);font-size:14px;font-variant-numeric:tabular-nums}
-.bar{height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden}
-.bar i{display:block;height:100%;background:var(--primary);border-radius:99px}
-.note{color:var(--muted);font-size:12.5px;margin:8px 0 0}
-.cal-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
-.cal-head .mes{font-size:20px}
-.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) 96px;gap:4px}
-.dow{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;padding:4px 6px}
-.day{min-height:92px;border:1px solid var(--line);border-radius:10px;padding:5px;background:var(--surface);cursor:pointer;display:flex;flex-direction:column;gap:3px;text-align:left;min-width:0;overflow:hidden}
-.day:hover{border-color:var(--primary)}
-.day.out{background:transparent;opacity:.5}
-.day.today .dn{background:var(--primary);color:var(--primary-fg)}
-.day.sel{outline:2px solid var(--primary);outline-offset:-2px}
-.dn{font-size:12px;font-weight:600;width:22px;height:22px;border-radius:99px;display:grid;place-items:center}
-.cchips{display:flex;flex-direction:column;gap:2px;min-width:0}
-.cchip{font-size:11px;padding:2px 6px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
-.cchip.fam{box-shadow:inset 3px 0 0 #7b63b8} .cchip.ctr{box-shadow:inset 3px 0 0 #2e7d32} .cchip.paid{background:var(--ok-bg);color:var(--ok)} .cchip.due{background:var(--warn-bg);color:var(--warn)} .cchip.late{background:var(--bad-bg);color:var(--bad)}
-.dots{display:none;gap:3px;flex-wrap:wrap}
-.dots i{width:7px;height:7px;border-radius:99px;display:block}
-.dots i.paid{background:var(--ok)} .dots i.due{background:var(--warn)} .dots i.late{background:var(--bad)}
-.wk{border:1px solid var(--line);border-radius:10px;background:var(--surface-2);padding:6px 8px;cursor:pointer;display:flex;flex-direction:column;justify-content:center;text-align:right;min-width:0}
-.wk:hover{border-color:var(--primary)}
-.wk.sel{outline:2px solid var(--primary);outline-offset:-2px}
-.wk b{font-family:var(--display);font-size:14px;font-variant-numeric:tabular-nums}
-.wk span{font-size:11px;color:var(--muted)}
-.bill{display:grid;grid-template-columns:minmax(140px,1.4fr) minmax(110px,1fr) minmax(130px,1fr) auto;gap:10px;align-items:end;padding:12px 0;border-bottom:1px solid var(--line)}
-.bill:last-child{border-bottom:0}
-.bill .who b{display:block} .bill .who span{color:var(--muted);font-size:12.5px}
-.bill.paid .who b{text-decoration:line-through;opacity:.65}
-.bill label,.setg label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600;min-width:0}
-input{background:var(--bg);border:1px solid var(--line-strong);border-radius:9px;padding:8px 10px;min-height:38px;width:100%;min-width:0}
-input:focus{border-color:var(--primary)}
-.setg{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
-.cell-in{min-width:90px;padding:6px 8px;min-height:34px}
-@media (max-width:900px){.grid2{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:640px){
-  .cal{grid-template-columns:repeat(7,minmax(0,1fr)) 62px;gap:3px}
-  .day{min-height:58px;padding:3px}
-  .cchips{display:none} .dots{display:flex}
-  .bill{grid-template-columns:1fr 1fr}
-  .bill .who,.bill .go{grid-column:1/-1}
-  .kpi strong{font-size:24px}
-  .wk b{font-size:12px}
-  .card{padding:16px}
-}
-`;
-
-  /* ---------- montagem ---------- */
-  function banners(M) {
-    return M.demo ? '<div class="banner"><span><b>Exemplo ilustrativo.</b> Abastecimentos, oficina e produção abaixo são inventados para mostrar como a tela funciona. Funcionários e contas fixas são os seus.</span><button class="btn primary sm" data-a="demooff" type="button">Começar com meus dados</button></div>' : '';
-  }
-  function build(mode) {
-    CT.mode = mode === 'familia' || mode === 'geral' ? mode : '';
-    const M = CT.M = model();
-    const draws = [];
-    const host = document.createElement('div');
-    const root = host.attachShadow({ mode: 'open' });
-    const fam = CT.mode === 'familia', ger = CT.mode === 'geral';
-    const TB = fam ? FTABS : TABS, cur = fam ? CT.ftab : CT.tab;
-    const tabs = ger ? '' : '<div class="tabs" role="tablist">' + TB.map(t => '<button class="tab" role="tab" data-a="' + (fam ? 'ftab' : 'tab') + '" data-t="' + t[0] + '" aria-selected="' + (cur === t[0]) + '" type="button">' + t[1] + '</button>').join('') + '</div>';
-    const withChips = !fam && !ger && ['resumo', 'contrato', 'producao', 'maquinas', 'lanc'].indexOf(CT.tab) >= 0;
-    const body = ger ? V.geral(M, draws) : fam ? (V['fam_' + CT.ftab] || V.fam_calendario)(M, draws) : (V[CT.tab] || V.resumo)(M, draws);
-    root.innerHTML = '<style>' + CSS + '</style><div class="ctl">' + tabs + (fam || ger ? '' : banners(M)) + (withChips ? ctrChips(M) : '') + body + '</div>';
-    root.addEventListener('click', e => {
-      const b = e.target.closest('[data-a]'); if (!b) return;
-      const a = b.dataset.a, d = b.dataset;
-      if (a === 'tab') { CT.tab = d.t; render(); window.scrollTo(0, 0); }
-      else if (a === 'ftab') { CT.ftab = d.t; render(); window.scrollTo(0, 0); }
-      else if (a === 'gnav') { const n = +d.d; if (n === 0) { const t = new Date(); CT.gY = t.getFullYear(); CT.gM = t.getMonth(); } else { const t = new Date(CT.gY, CT.gM + n, 1); CT.gY = t.getFullYear(); CT.gM = t.getMonth(); } render(); }
-      else if (a === 'ctr') { CT.contrato = d.id; render(); }
-      else if (a === 'calview') { CT.calView = d.v; if (d.id) CT.contrato = d.id; render(); }
-      else if (a === 'gocontratos') go('fechamento');
-      else if (a === 'lancar') {
-        const pr = d.date ? { date: d.date } : {};
-        if (d.tab === 'conta') { if (CT.mode === 'familia' || (CT.tab === 'calendario' && CT.calView === 'familia')) pr.dono = 'familia'; else if (CT.tab === 'calendario' && CT.calView === 'ctr') pr.dono = 'contrato'; }
-        openLancar(d.tab, pr);
-      }
-      else if (a === 'pay') togglePay(M, d.id);
-      else if (a === 'period') { CT.period = d.p; render(); }
-      else if (a === 'ltab') { CT.lTab = d.t; render(); }
-      else if (a === 'selday') { CT.calSel = { t: 'day', d: d.d }; const dt = parseD(d.d); CT.calY = dt.getFullYear(); CT.calM = dt.getMonth(); render(); }
-      else if (a === 'selweek') { CT.calSel = { t: 'week', d: d.d }; render(); }
-      else if (a === 'calnav') { const n = +d.d; if (n === 0) { const t = new Date(); CT.calY = t.getFullYear(); CT.calM = t.getMonth(); } else { const t = new Date(CT.calY, CT.calM + n, 1); CT.calY = t.getFullYear(); CT.calM = t.getMonth(); } CT.calSel = null; render(); }
-      else if (a === 'demooff') { CT.demoOff = true; try { localStorage.setItem('natisa_ctl_demo_off', '1'); } catch (x) {} render(); openLancar('fuel'); }
-      else if (a === 'del') { askConfirm({ title: 'Excluir lançamento', text: 'Excluir este lançamento?', yes: 'Excluir', danger: true }).then(ok => { if (ok) dbDelete(d.c, d.id).then(() => toast('Lançamento excluído')).catch(() => {}); }); }
-      else if (a === 'delbill') { askConfirm({ title: 'Excluir conta', text: 'Excluir esta conta avulsa?', yes: 'Excluir', danger: true }).then(ok => { if (ok) dbDelete('contas', d.id).then(() => toast('Conta excluída')).catch(() => {}); }); }
-      else if (a === 'addarr') { const c = clone(cfgRaw()); if (d.k === 'maquinas') c.maquinas.push({ nome: 'Nova máquina', comb: '' }); if (d.k === 'servicos') c.servicos.push('Novo serviço'); if (d.k === 'fixasFam') { c.fixasFam = (c.fixasFam || []).concat([{ nome: 'Nova conta', valor: null, dia: null }]); } saveCfg(c); }
-      else if (a === 'rmarr') { askConfirm({ title: 'Remover', text: 'Remover este item da lista? Lançamentos antigos continuam salvos.', yes: 'Remover', danger: true }).then(ok => { if (!ok) return; const c = clone(cfgRaw()); c[d.k].splice(+d.i, 1); saveCfg(c); }); }
-      else if (a === 'importfunc') importarFuncionarios();
-      else if (a === 'importmaq') importarMaquinas();
-      else if (a === 'goequip') { S.ui.custosTab = 'equip'; go('custos'); }
-      else if (a === 'goequipe') { S.ui.custosTab = 'equipe'; go('custos'); }
-    });
-    root.addEventListener('change', e => {
-      const t = e.target, d = t.dataset;
-      if (d.bill) {
-        if (d.f === 'valor') { const raw = t.value.trim(); saveBill(M, d.bill, { valor: raw === '' ? null : num(raw) }).catch(() => {}); }
-        else if (d.f === 'venc') saveBill(M, d.bill, { venc: t.value }).catch(() => {});
-      } else if (d.cfg) {
-        const c = clone(cfgRaw()); let v = t.value;
-        if (d.kind === 'num') v = num(v); else if (d.kind === 'pct') v = num(v) / 100;
-        if (d.cfg === 'inicio') { if (!v) return; v = weekStart(v); }
-        c[d.cfg] = v; saveCfg(c);
-      } else if (d.arr) {
-        const c = clone(cfgRaw()), i = +d.i; let v = t.value;
-        if (d.kind === 'num') v = num(v); else if (d.kind === 'pct') v = num(v) / 100;
-        else if (d.kind === 'numn') v = v.trim() === '' ? null : num(v);
-        else if (d.kind === 'dia') { v = Math.min(28, Math.max(0, Math.round(num(v)))); if (!v) v = null; }
-        if (d.k === '*') c[d.arr][i] = v; else c[d.arr][i][d.k] = v;
-        saveCfg(c);
-      }
-    });
-    setTimeout(() => {
-      const cs = v => getComputedStyle(host).getPropertyValue(v).trim();
-      draws.forEach(f => { try { f(root, cs); } catch (e) { console.error(e); } });
-    }, 0);
-    const wrap = h('div', null,
-      CT.mode === 'geral' ? pageHead('Financeiro geral', 'Contratos, empresa e família somados: quanto gastamos e quanto falta pagar')
-      : CT.mode === 'familia'
-        ? pageHead('Família', 'Contas pessoais da família, separadas da empresa e dos contratos', btn('Conta avulsa', { kind: 'primary', icon: 'plus', onclick: () => openLancar('conta', { dono: 'familia' }) }))
-        : pageHead('Controle de gastos', 'Gastos e receita por contrato, máquinas, funcionários e contas a pagar, semana a semana', btn('Lançar', { kind: 'primary', icon: 'plus', onclick: () => openLancar('fuel') })),
-      host);
-    return wrap;
-  }
-  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.route === 'controle' || S.route === 'familia' || S.route === 'geral') render(); }); } catch (e) {}
-  return build;
-})();
-
 /* ================= shell, rotas e inicialização ================= */
-const ROUTES = { painel: viewPainel, controle: () => viewControle('empresa'), familia: () => viewControle('familia'), geral: () => viewControle('geral'), editais: viewEditais, agenda: viewAgenda, clientes: viewClientes, cidades: viewCidades, custos: viewCustos, fechamento: viewFechamento };
+const ROUTES = { painel: viewPainel, editais: viewEditais, agenda: viewAgenda, clientes: viewClientes, cidades: viewCidades, custos: viewCustos, fechamento: viewFechamento, financeiro: viewFinanceiro };
 const NAV = [
   { g: 'Visão geral', items: [['painel', 'Painel']] },
-  { g: 'Licitações', items: [['editais', 'Editais'], ['agenda', 'Agenda semanal']] },
-  { g: 'Contratos', items: [['fechamento', 'Contratos']] },
-  { g: 'Financeiro', items: [['geral', 'Financeiro geral'], ['controle', 'Controle de gastos'], ['familia', 'Família']] },
-  { g: 'Cadastros', items: [['clientes', 'Clientes'], ['cidades', 'Cidades'], ['custos', 'Equipe e custos']] }
+  { g: 'Operação', items: [['editais', 'Editais'], ['fechamento', 'Fechamento'], ['agenda', 'Agenda semanal']] },
+  { g: 'Cadastros', items: [['clientes', 'Clientes'], ['cidades', 'Cidades']] },
+  { g: 'Dinheiro', items: [['financeiro', 'Financeiro'], ['custos', 'Custos e orçamento']] }
 ];
 const app = document.getElementById('app');
 function navCount(r) {
@@ -3424,7 +2591,7 @@ function setRoute() {
   const fid = next === 'fechamento' && parts[1] ? decodeURIComponent(parts[1]) : null;
   const changed = next !== S.route || fid !== S.fechId;
   S.route = next; S.fechId = fid;
-  if (changed) S.ui.fech.aba = 'resumo';
+  if (changed) S.ui.fech.aba = (fid && TABS_FECH.some(t => t[0] === parts[2])) ? parts[2] : 'resumo';
   render();
   if (changed) window.scrollTo(0, 0);
 }
@@ -3439,16 +2606,13 @@ async function boot() {
   if (!db) { S.ready = true; render(); return; }
   S.db = db;
   if (window.SB) window.SB.email().then(e => { S.email = e; render(); });
-  const mark = k => { S.loaded.add(k); if (S.loaded.size >= COLS.length + 2) S.ready = true; render(); };
+  const mark = k => { S.loaded.add(k); if (S.loaded.size >= COLS.length + 1) S.ready = true; render(); };
   COLS.forEach(col => db.collection(col).onSnapshot(
     snap => { S.data[col] = snap.docs.map(d => Object.assign({ id: d.id }, JSON.parse(JSON.stringify(d.data())))); mark(col); },
     err => { console.error(col, err); mark(col); }));
   db.doc('config/premissas').onSnapshot(
     snap => { S.premSaved = !!snap.exists; S.prem = Object.assign({}, DEFAULT_PREM, snap.exists ? JSON.parse(JSON.stringify(snap.data())) : {}); mark('prem'); },
     () => mark('prem'));
-  db.doc('config/controle').onSnapshot(
-    snap => { if (!CTLSYNC.dirty) S.ctl = snap.exists ? JSON.parse(JSON.stringify(snap.data())) : null; mark('ctl'); },
-    () => mark('ctl'));
   setTimeout(() => { if (!S.ready) { S.ready = true; render(); } }, 8000);
 }
 boot();
