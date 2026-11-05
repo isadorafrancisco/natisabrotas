@@ -2079,6 +2079,11 @@ function precoDoContrato(c) {
 function m2Total(c) { const pr = +c.precoM2; return pr > 0 && c.valorContratado > 0 ? c.valorContratado / pr : null; }
 /* m² já feitos do contrato: os m² lançados em cada mês (aba Lucro) ou, sem m², o faturado ÷ valor por m². Os mesmos números alimentam o Falta fazer e o Controle de gastos */
 function m2Feito(c) { const pr = +c.precoM2 > 0 ? +c.precoM2 : 0; return sum(S.data.medicoes.filter(m => m.contratoId === c.id), m => +m.m2 > 0 ? +m.m2 : (pr ? (+m.valorFaturado || 0) / pr : 0)); }
+/* o que foi lançado em cada mês do contrato: m² (lançado ou faturado ÷ valor por m²) e receita (valor faturado) */
+function medsDoContrato(k) {
+  const pr = +k.precoM2 > 0 ? +k.precoM2 : 0;
+  return S.data.medicoes.filter(m => m.contratoId === k.id && /^\d{4}-\d{2}$/.test(m.competencia || '')).map(m => { const rec = +m.valorFaturado || 0, m2 = +m.m2 > 0 ? +m.m2 : (pr ? rec / pr : 0); return { comp: m.competencia, m2, rec }; }).filter(x => x.m2 > 0 || x.rec > 0);
+}
 const brl4 = n => n == null || !isFinite(n) ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4 });
 /* uma linha por mês: o que foi roçado/produzido, os custos do mês, o lucro e quanto sobrou no contrato */
 function mesesLucro(c, s) {
@@ -2790,22 +2795,45 @@ const viewControle = (function () {
     const cid = r => r.contratoId || dc, mine = r => cid(r) === selId;
     const emps = S.data.funcionarios.filter(f => f.empresa === 'Natisa' || f.empresa === 'Compartilhado').map(f => empCalc(f, cfg));
     const funcSem = selId === dc ? sum(emps, x => x.semana) : 0;
-    const real = S.data.abastecimentos.length + S.data.oficina.length + S.data.producao.length > 0;
+    const real = S.data.abastecimentos.length + S.data.oficina.length + S.data.producao.length + S.data.medicoes.length + S.data.gastos.length > 0;
     const demo = !real && !CT.demoOff && S.ready;
     let fuel = S.data.abastecimentos, ofi = S.data.oficina, prod = S.data.producao, inicio = ctr.inicio > weekStart(td) ? weekStart(td) : ctr.inicio;
     if (demo) { inicio = weekStart(addDays(td, -35)); const d = demoData(cfg, inicio); fuel = d.fuel; ofi = d.ofi; prod = d.prod; }
+    /* o controle começa na primeira semana com lançamento no contrato, para o histórico não ficar todo numa semana só */
+    if (!demo) { const kSel = S.data.contratos.find(z => z.id === selId); if (kSel) { const ms0 = medsDoContrato(kSel).map(x => x.comp).sort(); if (ms0.length && weekStart(ms0[0] + '-01') < inicio) inicio = weekStart(ms0[0] + '-01'); } }
     const wkOf = s => Math.floor(diffDays(s, inicio) / 7);
     const nowW = Math.max(0, wkOf(td));
+    /* tudo que foi lançado na aba do contrato entra aqui: o mês é dividido pelos dias já passados e vira semanas; os custos lançados à mão entram na semana da data */
+    const gastosC = demo ? [] : S.data.gastos.filter(g => g.data && +g.valor > 0 && list.some(x => x.id === g.contratoId));
+    if (!demo) {
+      const comContrato = new Set(), novas = [];
+      list.forEach(x => {
+        const k = S.data.contratos.find(z => z.id === x.id); if (!k) return;
+        const ms = medsDoContrato(k); if (!ms.length) return;
+        comContrato.add(x.id);
+        ms.forEach(mm => {
+          const par = mm.comp.split('-'), ini = mm.comp + '-01', fim = mm.comp + '-' + pad(new Date(+par[0], +par[1], 0).getDate());
+          let lo = ini, hi = fim < td ? fim : td;
+          if (lo > hi) { lo = td; hi = td; }
+          const cnt = {}; let tot = 0;
+          for (let d = lo; d <= hi; d = addDays(d, 1)) { const wi = wkOf(d); (cnt[wi] = cnt[wi] || { n: 0, first: d }).n++; tot++; }
+          Object.keys(cnt).forEach(wi => novas.push({ contratoId: x.id, data: cnt[wi].first, m2: mm.m2 * cnt[wi].n / tot, _rec: mm.rec * cnt[wi].n / tot, _ctr: true }));
+        });
+      });
+      prod = prod.filter(r => !comContrato.has(cid(r))).concat(novas);
+    }
+    const recOf = (r, pc) => r._rec != null ? r._rec : (+r.m2 || 0) * pc;
     const weeks = [];
-    for (let n = 0; n <= nowW; n++) weeks.push({ n, start: addDays(inicio, 7 * n), end: addDays(inicio, 7 * n + 6), litros: 0, comb: 0, ofi: 0, m2: 0, func: funcSem });
+    for (let n = 0; n <= nowW; n++) weeks.push({ n, start: addDays(inicio, 7 * n), end: addDays(inicio, 7 * n + 6), litros: 0, comb: 0, ofi: 0, ext: 0, rec: 0, m2: 0, func: funcSem });
     fuel.forEach(f => { if (!mine(f)) return; const w = weeks[wkOf(f.data)]; if (!w) return; w.litros += +f.litros || 0; w.comb += +f.valor || 0; });
     ofi.forEach(f => { if (!mine(f)) return; const w = weeks[wkOf(f.data)]; if (!w) return; w.ofi += +f.valor || 0; });
-    prod.forEach(f => { if (!mine(f)) return; const w = weeks[wkOf(f.data)]; if (!w) return; w.m2 += +f.m2 || 0; });
+    prod.forEach(f => { if (!mine(f)) return; const w = weeks[wkOf(f.data)]; if (!w) return; w.m2 += +f.m2 || 0; w.rec += recOf(f, preco); });
+    gastosC.forEach(g => { if (g.contratoId !== selId) return; const w = weeks[wkOf(g.data)]; if (!w) return; w.ext += +g.valor || 0; });
     weeks.forEach(w => {
-      w.custo = w.func + w.comb + w.ofi; w.receita = w.m2 * preco; w.res = w.receita - w.custo;
+      w.custo = w.func + w.comb + w.ofi + w.ext; w.receita = w.rec; w.res = w.receita - w.custo;
       w.l1000 = w.m2 ? w.litros / w.m2 * 1000 : null; w.c1000 = w.m2 ? w.comb / w.m2 * 1000 : null; w.o1000 = w.m2 ? w.ofi / w.m2 * 1000 : null; w.margem = w.receita ? w.res / w.receita : null;
     });
-    const tot = { litros: sum(weeks, w => w.litros), comb: sum(weeks, w => w.comb), ofi: sum(weeks, w => w.ofi), m2: sum(weeks, w => w.m2), func: sum(weeks, w => w.func), custo: sum(weeks, w => w.custo), receita: sum(weeks, w => w.receita), res: sum(weeks, w => w.res) };
+    const tot = { litros: sum(weeks, w => w.litros), comb: sum(weeks, w => w.comb), ofi: sum(weeks, w => w.ofi), ext: sum(weeks, w => w.ext), m2: sum(weeks, w => w.m2), func: sum(weeks, w => w.func), custo: sum(weeks, w => w.custo), receita: sum(weeks, w => w.receita), res: sum(weeks, w => w.res) };
     tot.l1000 = tot.m2 ? tot.litros / tot.m2 * 1000 : null; tot.o1000 = tot.m2 ? tot.ofi / tot.m2 * 1000 : null; tot.c1000 = tot.m2 ? tot.custo / tot.m2 * 1000 : null;
     weeks.forEach(w => {
       w.alertas = [];
@@ -2859,7 +2887,8 @@ const viewControle = (function () {
       billsE.filter(b => b.mes === key).forEach(b => { const t = mo[b.tipo] != null ? b.tipo : 'outros'; mo[t] += b.valor || 0; });
       fuel.forEach(f => { if ((f.data || '').slice(0, 7) === key) mo.contrato += +f.valor || 0; });
       ofi.forEach(f => { if ((f.data || '').slice(0, 7) === key) mo.contrato += +f.valor || 0; });
-      prod.forEach(f => { if ((f.data || '').slice(0, 7) === key) mo.receita += (+f.m2 || 0) * ((list.find(x => x.id === cid(f)) || ctr).preco); });
+      prod.forEach(f => { if ((f.data || '').slice(0, 7) === key) mo.receita += recOf(f, (list.find(x => x.id === cid(f)) || ctr).preco); });
+      gastosC.forEach(g => { if ((g.data || '').slice(0, 7) === key) mo.contrato += +g.valor || 0; });
       mo.total = mo.folha + mo.impostos + mo.agua + mo.energia + mo.internet + mo.contador + mo.outros + mo.contrato;
       months.push(mo);
     }
@@ -2993,6 +3022,7 @@ const viewControle = (function () {
       { label: 'Funcionários', data: ws.map(x => x.func), backgroundColor: c.func, stack: 'c', borderRadius: 3 },
       { label: 'Combustível', data: ws.map(x => x.comb), backgroundColor: c.comb, stack: 'c', borderRadius: 3 },
       { label: 'Oficina', data: ws.map(x => x.ofi), backgroundColor: c.ofi, stack: 'c', borderRadius: 3 },
+      { label: 'Outros custos', data: ws.map(x => x.ext), backgroundColor: c.alt, stack: 'c', borderRadius: 3 },
       { type: 'line', label: 'Receita', data: ws.map(x => x.receita), borderColor: c.rec, backgroundColor: c.rec, borderWidth: 3, pointRadius: 3, tension: .25 }] }, options: baseOpts(cs) }; });
   }
 
@@ -3002,11 +3032,11 @@ const viewControle = (function () {
     const w = M.cur, f = w.custo || 1;
     let h2 = '<section class="kpis">' +
       '<div class="kpi hero"><span class="kl">Resultado da semana</span><strong>' + R0(w.res) + '</strong><span class="ks">Receita ' + R0(w.receita) + ' menos custo ' + R0(w.custo) + '</span></div>' +
-      '<div class="kpi"><span class="kl">Custo do contrato</span><strong>' + R0(w.custo) + '</strong><div class="split"><i style="width:' + (w.func / f * 100) + '%;background:var(--info)"></i><i style="width:' + (w.comb / f * 100) + '%;background:var(--warn)"></i><i style="width:' + (w.ofi / f * 100) + '%;background:var(--viol)"></i></div><span class="ks">Func. ' + R0(w.func) + ' · Comb. ' + R0(w.comb) + ' · Of. ' + R0(w.ofi) + '</span></div>' +
+      '<div class="kpi"><span class="kl">Custo do contrato</span><strong>' + R0(w.custo) + '</strong><div class="split"><i style="width:' + (w.func / f * 100) + '%;background:var(--info)"></i><i style="width:' + (w.comb / f * 100) + '%;background:var(--warn)"></i><i style="width:' + (w.ofi / f * 100) + '%;background:var(--viol)"></i><i style="width:' + (w.ext / f * 100) + '%;background:var(--muted)"></i></div><span class="ks">Func. ' + R0(w.func) + ' · Comb. ' + R0(w.comb) + ' · Of. ' + R0(w.ofi) + (w.ext ? ' · Outros ' + R0(w.ext) : '') + '</span></div>' +
       kpiH('Área roçada', N0(w.m2) + ' m²', w.l1000 != null ? N2(w.l1000) + ' L por 1.000 m²' : 'Sem consumo calculado') +
       kpiH('A pagar nesta semana', R0(M.payWeek.pend), M.payWeek.count + ' conta(s) · já pago ' + R0(M.payWeek.paid), M.payWeek.pend > 0 ? 'warn' : '') +
       kpiH('Vencido e não pago', R0(M.overSum), M.overdue.length ? M.overdue.length + ' conta(s) em atraso' : 'Nenhuma em atraso', M.overSum > 0 ? 'bad' : 'ok') + '</section>';
-    h2 += '<section class="grid2"><div class="card"><h3>Custo x receita por semana</h3><p class="sub">Últimas 12 semanas. Barras empilhadas são o custo; a linha é a receita (m² × ' + R(M.preco) + ').</p><div class="chart"><canvas id="c-res" role="img" aria-label="Custo e receita por semana"></canvas></div></div>' +
+    h2 += '<section class="grid2"><div class="card"><h3>Custo x receita por semana</h3><p class="sub">Últimas 12 semanas. Barras empilhadas são o custo; a linha é a receita (o que foi lançado no contrato).</p><div class="chart"><canvas id="c-res" role="img" aria-label="Custo e receita por semana"></canvas></div></div>' +
       '<div class="stack"><div class="card"><h3>Atenção</h3><p class="sub">O que merece um olhar agora.</p>' + M.alerts.map(a => '<div class="alert ' + a.t + '">' + E(a.x) + '</div>').join('') + '</div>' +
       '<div class="card"><div class="card-h"><h3>Próximos vencimentos</h3><button class="pill mute" data-a="tab" data-t="calendario" type="button">Ver calendário</button></div>' +
       (M.prox.length ? '<div class="list">' + M.prox.slice(0, 7).map(b => proxRow(b, M)).join('') + '</div>' : emptyBox('Nada vence nos próximos 14 dias', 'Defina os dias de vencimento em Ajustes para ver as contas aqui.')) + '</div></div></section>';
@@ -3016,13 +3046,13 @@ const viewControle = (function () {
   V.contrato = function (M, draws) {
     const t = M.tot;
     let h2 = '<p class="lead">Quanto o contrato "' + E(M.main) + '" custa e rende por semana. Funcionários entram com encargos, rateados pelo % de cada um no contrato.</p>';
-    h2 += '<section class="kpis">' + kpiH('Custo acumulado', R0(t.custo), 'Desde ' + fmtS(M.inicio)) + kpiH('Receita estimada', R0(t.receita), N0(t.m2) + ' m² × ' + R(M.preco)) +
+    h2 += '<section class="kpis">' + kpiH('Custo acumulado', R0(t.custo), 'Desde ' + fmtS(M.inicio)) + kpiH('Receita estimada', R0(t.receita), N0(t.m2) + ' m² lançados') +
       kpiH('Resultado acumulado', R0(t.res), t.receita ? PC(t.res / t.receita) + ' de margem' : 'Sem receita ainda', t.res >= 0 ? 'ok' : 'bad') +
       kpiH('Custo por 1.000 m²', t.c1000 != null ? R(t.c1000) : '–', 'Recebido por 1.000 m²: ' + R(1000 * M.preco)) + '</section>';
     h2 += '<section class="card"><h3>Custo e receita por semana</h3><p class="sub">Últimas 26 semanas.</p><div class="chart"><canvas id="c-con" role="img" aria-label="Custo e receita por semana"></canvas></div></section>';
-    h2 += '<section class="card"><div class="card-h"><div><h3>Semana a semana</h3><p class="sub" style="margin:0">Mais recente primeiro.</p></div></div><div class="scroll"><table><thead><tr><th>Semana</th><th>Funcionários</th><th>Combustível</th><th>Oficina</th><th>Custo total</th><th>m² roçados</th><th>Receita</th><th>Resultado</th><th>Margem</th><th></th></tr></thead><tbody>' +
-      M.weeks.slice().reverse().map(w => '<tr><td>' + wkLabel(w) + (w.n === M.nowW ? ' <span class="pill mute">atual</span>' : '') + '</td><td>' + R(w.func) + '</td><td>' + R(w.comb) + '</td><td>' + R(w.ofi) + '</td><td><b>' + R(w.custo) + '</b></td><td>' + N0(w.m2) + '</td><td>' + R(w.receita) + '</td><td class="' + (w.res >= 0 ? 'pos' : 'neg') + '"><b>' + R(w.res) + '</b></td><td>' + PC(w.margem) + '</td><td>' + pillRes(w.res) + '</td></tr>').join('') +
-      '<tr class="tot"><td>Total</td><td>' + R(t.func) + '</td><td>' + R(t.comb) + '</td><td>' + R(t.ofi) + '</td><td>' + R(t.custo) + '</td><td>' + N0(t.m2) + '</td><td>' + R(t.receita) + '</td><td>' + R(t.res) + '</td><td>' + PC(t.receita ? t.res / t.receita : null) + '</td><td></td></tr></tbody></table></div>' +
+    h2 += '<section class="card"><div class="card-h"><div><h3>Semana a semana</h3><p class="sub" style="margin:0">Mais recente primeiro.</p></div></div><div class="scroll"><table><thead><tr><th>Semana</th><th>Funcionários</th><th>Combustível</th><th>Oficina</th><th>Outros</th><th>Custo total</th><th>m² roçados</th><th>Receita</th><th>Resultado</th><th>Margem</th><th></th></tr></thead><tbody>' +
+      M.weeks.slice().reverse().map(w => '<tr><td>' + wkLabel(w) + (w.n === M.nowW ? ' <span class="pill mute">atual</span>' : '') + '</td><td>' + R(w.func) + '</td><td>' + R(w.comb) + '</td><td>' + R(w.ofi) + '</td><td>' + R(w.ext) + '</td><td><b>' + R(w.custo) + '</b></td><td>' + N0(w.m2) + '</td><td>' + R(w.receita) + '</td><td class="' + (w.res >= 0 ? 'pos' : 'neg') + '"><b>' + R(w.res) + '</b></td><td>' + PC(w.margem) + '</td><td>' + pillRes(w.res) + '</td></tr>').join('') +
+      '<tr class="tot"><td>Total</td><td>' + R(t.func) + '</td><td>' + R(t.comb) + '</td><td>' + R(t.ofi) + '</td><td>' + R(t.ext) + '</td><td>' + R(t.custo) + '</td><td>' + N0(t.m2) + '</td><td>' + R(t.receita) + '</td><td>' + R(t.res) + '</td><td>' + PC(t.receita ? t.res / t.receita : null) + '</td><td></td></tr></tbody></table></div>' +
       '<p class="note">Funcionários: ' + R(M.funcSem) + ' por semana (custo mensal ÷ 4,33, vezes o % no contrato). Ajuste em Ajustes.</p></section>';
     stackedWeekly(draws, 'c-con', M.weeks.slice(-26));
     return h2;
@@ -3152,14 +3182,16 @@ const viewControle = (function () {
       const rows = M.list.map(c => {
         const cb = bm.filter(b => b.dono === 'contrato' && b.contratoId === c.id);
         const comb = sum(fuel.filter(r => cid(r) === c.id), r => +r.valor || 0), of = sum(ofi.filter(r => cid(r) === c.id), r => +r.valor || 0);
-        const rec = sum(prod.filter(r => cid(r) === c.id), r => (+r.m2 || 0) * c.preco), contas = sumB(cb);
-        return { nome: c.nome, tipo: 'contrato', contas, comb, of, rec, gasto: contas + comb + of, aPagar: sumB(cb, b => b.status !== 'Pago') };
+        const ct = S.data.contratos.find(z => z.id === c.id), mc = ct ? medsDoContrato(ct) : [];
+        const rec = mc.length ? sum(mc.filter(m => m.comp === k), m => m.rec) : sum(prod.filter(r => cid(r) === c.id), r => (+r.m2 || 0) * c.preco), contas = sumB(cb);
+        const ext = sum(S.data.gastos.filter(g => g.contratoId === c.id && inM(g)), g => +g.valor || 0);
+        return { nome: c.nome, tipo: 'contrato', contas, comb, of, ext, rec, gasto: contas + comb + of + ext, aPagar: sumB(cb, b => b.status !== 'Pago') };
       });
       const e = bm.filter(b => b.dono === 'empresa'), f = bm.filter(b => b.dono === 'familia');
       rows.push({ nome: 'Empresa (contas gerais)', tipo: 'empresa', contas: sumB(e), comb: 0, of: 0, rec: 0, gasto: sumB(e), aPagar: sumB(e, b => b.status !== 'Pago') });
       rows.push({ nome: 'Família', tipo: 'familia', contas: sumB(f), comb: 0, of: 0, rec: 0, gasto: sumB(f), aPagar: sumB(f, b => b.status !== 'Pago') });
       const cats = {}; bm.forEach(b => { const n = (b.dono === 'familia' ? 'Família · ' : '') + b.cat; cats[n] = (cats[n] || 0) + (b.valor || 0); });
-      const cm = sum(fuel, r => +r.valor || 0), om = sum(ofi, r => +r.valor || 0); if (cm) cats['Combustível'] = cm; if (om) cats['Oficina'] = om;
+      const cm = sum(fuel, r => +r.valor || 0), om = sum(ofi, r => +r.valor || 0), xm = sum(rows, r => r.ext || 0); if (cm) cats['Combustível'] = cm; if (om) cats['Oficina'] = om; if (xm) cats['Custos lançados no contrato'] = xm;
       return { rows, bm, cats, gasto: sum(rows, r => r.gasto), aPagar: sum(rows, r => r.aPagar), receita: sum(rows, r => r.rec), pago: sumB(bm, b => b.status === 'Pago'),
         contratos: sum(rows.filter(r => r.tipo === 'contrato'), r => r.gasto), empresa: rows[rows.length - 2].gasto, familia: rows[rows.length - 1].gasto };
     }
