@@ -2166,12 +2166,16 @@ function tabCustos(c, s) {
   spec.cols = [{ h: 'Data', f: r => fmtD(r.data) }, { h: 'Categoria', f: r => pill(r.categoria || 'Outros') }, { h: 'Descrição', f: r => r._maq ? [r.descricao || '', ' ', h('span', { class: 'cell-s' }, '(Máquinas)')] : (r.descricao || '') }, { h: 'Valor', r: true, f: r => brl(r.valor, true) }];
   spec.emptyTitle = 'Nenhum custo lançado'; spec.emptyText = 'Lance o que o contrato gastou: combustível, máquinas, oficina, pessoal, materiais… O sistema soma por mês e desconta do lucro.';
   spec.footer = rows => h('tr', null, h('td', { colspan: 3 }, h('b', null, 'Total')), h('td', { class: 'r' }, h('b', null, brl(sum(rows, r => r.valor), true))));
-  const rows = s.gas.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+  const todas = s.gas.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+  /* filtro por mês da lista de custos */
+  const mesesLista = uniq(todas.map(g => (g.data || '').slice(0, 7)).filter(Boolean));
+  const mesSel = mesesLista.indexOf(S.ui.fech.mesCusto) >= 0 ? S.ui.fech.mesCusto : '';
+  const rows = mesSel ? todas.filter(g => (g.data || '').slice(0, 7) === mesSel) : todas;
   const porCat = {}; s.gas.forEach(g => { const k = g.categoria || 'Outros'; porCat[k] = (porCat[k] || 0) + (g.valor || 0); });
   const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
   const hoje = todayISO().slice(0, 7), doMes = sum(s.gas.filter(g => (g.data || '').slice(0, 7) === hoje), g => g.valor);
   const porMes = {}; s.gas.forEach(g => { const k = (g.data || '').slice(0, 7); if (k) porMes[k] = (porMes[k] || 0) + (g.valor || 0); });
-  const meses = Object.entries(porMes).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 6).map(x => [compLabel(x[0]), x[1]]);
+  const meses = Object.entries(porMes).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12).map(x => [compLabel(x[0]), x[1]]);
   const consumo = s.custoOrc ? s.custoReal / s.custoOrc : null;
   const cat = n => sum(s.gas.filter(g => g.categoria === n), g => g.valor);
   return h('div', null,
@@ -2190,6 +2194,9 @@ function tabCustos(c, s) {
       h('div', { class: 'card card-p' }, h('h3', null, 'Por mês'), barList(meses, Math.max.apply(null, meses.map(x => x[1])), 'warn', v => brl(v)))) : null,
     h('div', { class: 'card', style: { marginTop: '16px' } },
       h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Custos lançados'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, S.db ? btn('Importar planilha', { icon: 'upload', onclick: () => importarGastos(c) }) : null, btn('Novo custo', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specGasto(c), null) }))),
+      mesesLista.length > 1 ? h('div', { class: 'card-p', style: { paddingTop: 0 } },
+        h('div', { class: 'chips' }, [['', 'Todos os meses']].concat(mesesLista.map(m => [m, compLabel(m)])).map(x => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(mesSel === x[0]), onclick: () => { S.ui.fech.mesCusto = x[0]; render(); } }, x[1]))),
+        h('p', { class: 'cell-s', style: { margin: '10px 0 0' } }, (mesSel ? compLabel(mesSel) : 'Todos os meses') + ': ' + rows.length + (rows.length === 1 ? ' lançamento' : ' lançamentos') + ', total ' + brl(sum(rows, r => r.valor), true))) : null,
       crudTable(spec, rows)));
 }
 
