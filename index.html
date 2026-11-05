@@ -1763,7 +1763,7 @@ function viewCustos() {
 }
 /* ================= FECHAMENTO DE LICITAÇÃO (contratos ganhos) ================= */
 const STATUS_CONTRATO = ['Em execução', 'Encerrado', 'Suspenso', 'Rescindido'];
-const CATS_GASTO = ['Pessoal', 'Equipamentos e manutenção', 'Combustível', 'Materiais e insumos', 'Deslocamento e diárias', 'Impostos e taxas', 'Outros'];
+const CATS_GASTO = ['Combustível', 'Máquinas e equipamentos', 'Oficina e manutenção', 'Outros'];
 const CATS_DOC = ['Contrato', 'Ordem de serviço', 'Certidões', 'Garantia e seguro', 'Medição e nota fiscal', 'Fiscalização', 'Outros'];
 const MODELO_PEND = [
   ['Assinar o contrato', 0], ['Receber a ordem de serviço', 3], ['Apresentar garantia contratual, se o edital exigir', 7],
@@ -1888,12 +1888,12 @@ function viewFechamento() {
 }
 
 /* ---------- detalhe ---------- */
-const TABS_FECH = [['resumo', 'Resumo'], ['dados', 'Dados do contrato'], ['fin', 'Financeiro'], ['custos', 'Custos e lucro'], ['pend', 'Pendências'], ['docs', 'Documentos']];
+const TABS_FECH = [['resumo', 'Resumo'], ['dados', 'Dados do contrato'], ['fin', 'Financeiro'], ['lucro', 'Lucro'], ['custos', 'Custos'], ['pend', 'Pendências'], ['docs', 'Documentos']];
 function viewContrato(c) {
   const f = S.ui.fech, s = fechStats(c), v = vigenciaInfo(c);
   const nDocs = S.data.arquivos.filter(a => a.contratoId === c.id).length;
   const nPend = S.data.pendencias.filter(p => p.contratoId === c.id && p.tipo === 'pend' && !p.done).length;
-  const counts = { fin: s.med.length, custos: s.gas.length, pend: nPend, docs: nDocs };
+  const counts = { fin: s.med.length, lucro: mesesLucro(c, s).length, custos: s.gas.length, pend: nPend, docs: nDocs };
   const root = h('div');
   root.append(h('button', { class: 'btn ghost sm', style: { marginBottom: '8px', paddingLeft: '4px' }, onclick: () => go('fechamento') }, icon('back', 15), 'Todos os fechamentos'));
   root.append(pageHead(c.orgao || 'Contrato', c.objeto || '',
@@ -1902,7 +1902,7 @@ function viewContrato(c) {
     c.empresa ? pill(c.empresa, empKind(c.empresa)) : null, pill(c.status, statusKind(c.status)), pill(v.txt, v.kind),
     c.numeroContrato ? pill('Contrato ' + c.numeroContrato, 'info') : null, c.numeroEdital ? pill('Edital ' + c.numeroEdital) : null, exTag(c)));
   root.append(h('div', { class: 'tabs', role: 'tablist' }, TABS_FECH.map(x => h('button', { class: 'tab', role: 'tab', 'aria-selected': String(f.aba === x[0]), onclick: () => { f.aba = x[0]; render(); } }, x[1], counts[x[0]] ? ' (' + counts[x[0]] + ')' : ''))));
-  const body = { resumo: tabResumo, dados: tabDados, fin: tabFin, custos: tabCustos, pend: tabPend, docs: tabDocs }[f.aba] || tabResumo;
+  const body = { resumo: tabResumo, dados: tabDados, fin: tabFin, lucro: tabLucro, custos: tabCustos, pend: tabPend, docs: tabDocs }[f.aba] || tabResumo;
   root.append(body(c, s, v));
   return root;
 }
@@ -1962,7 +1962,8 @@ const SPEC_CONTRATO = {
     { k: 'numeroContrato', label: 'Número do contrato', type: 'text' },
     { k: 'status', label: 'Situação', type: 'select', opts: STATUS_CONTRATO, blank: undefined },
     { k: 'valorContratado', label: 'Valor do contrato (R$)', type: 'number' },
-    { k: 'precoM2', label: 'Valor pago por m² (R$)', type: 'number', hint: 'Só para contratos de roçada: usado no Controle de gastos para calcular a receita.' },
+    { k: 'precoM2', label: 'Valor pago por m² (R$)', type: 'number', step: '0.0001', hint: 'Usado no Controle de gastos e na aba Lucro para calcular o que a gente ganha por m² roçado.' },
+    { k: 'm2Contratado', label: 'Metros quadrados do contrato (m²)', type: 'number', hint: 'Opcional. Mostra na aba Lucro quantos m² ainda faltam roçar.' },
     { k: 'meses', label: 'Duração (meses)', type: 'number', step: '1', hint: 'Com o início da vigência, o fim é calculado se estiver vazio.' },
     { k: 'dataAssinatura', label: 'Data de assinatura', type: 'date' },
     { k: 'ordemServico', label: 'Ordem de serviço', type: 'date' },
@@ -1982,7 +1983,7 @@ function tabDados(c) {
   return h('div', { class: 'card card-p' },
     h('dl', { class: 'dgrid', style: { margin: 0 } },
       dd('Órgão', c.orgao), dd('Cidade', c.cidade), dd('Empresa (CNPJ) do contrato', c.empresa), dd('Situação', c.status),
-      dd('Número do contrato', c.numeroContrato), dd('Número do edital', c.numeroEdital), dd('Modalidade', c.modalidade), dd('Valor do contrato', brl(c.valorContratado, true)),
+      dd('Número do contrato', c.numeroContrato), dd('Número do edital', c.numeroEdital), dd('Modalidade', c.modalidade), dd('Valor do contrato', brl(c.valorContratado, true)), dd('Metros quadrados do contrato', c.m2Contratado ? fmtN(c.m2Contratado, 2) + ' m²' : null),
       dd('Assinatura', fmtD(c.dataAssinatura)), dd('Ordem de serviço', fmtD(c.ordemServico)), dd('Início da vigência', fmtD(c.inicioVigencia)), dd('Fim da vigência', fmtD(c.fimVigencia)),
       dd('Duração', c.meses ? c.meses + ' meses' : null), dd('Gestor do contrato', c.gestor), dd('Fiscal do contrato', c.fiscal),
       dd('Contato do órgão', [c.contatoNome, c.contatoTel, c.contatoEmail].filter(Boolean).join(' · ')),
@@ -1998,18 +1999,20 @@ function specMedicao(c) {
   const ult = S.data.medicoes.filter(m => m.contratoId === c.id).map(m => m.competencia).sort().pop();
   let comp = todayISO().slice(0, 7); if (ult) { const d = new Date(+ult.slice(0, 4), +ult.slice(5, 7), 1); comp = d.getFullYear() + '-' + pad(d.getMonth() + 1); }
   return {
-    col: 'medicoes', singular: 'medição', extra: { contratoId: c.id }, defaults: { competencia: comp, valorFaturado: mensal },
+    col: 'medicoes', singular: 'medição', extra: { contratoId: c.id }, defaults: { competencia: comp, valorFaturado: mensal, precoM2: precoDoContrato(c) },
     fields: [
       { k: 'competencia', label: 'Competência (mês) *', type: 'month', req: true },
       { k: 'descricao', label: 'Descrição', type: 'text' },
       { k: 'nf', label: 'Nota fiscal', type: 'text' },
-      { k: 'valorFaturado', label: 'Valor faturado (R$) *', type: 'number', req: true },
+      { k: 'm2', label: 'Metros quadrados roçados', type: 'number' },
+      { k: 'precoM2', label: 'Valor por m² (R$)', type: 'number', step: '0.0001' },
+      { k: 'valorFaturado', label: 'Valor faturado (R$) *', type: 'number', hint: 'Com m² e valor por m², é calculado sozinho.' },
       { k: 'dataEmissao', label: 'Data de emissão', type: 'date' },
       { k: 'previsao', label: 'Previsão de recebimento', type: 'date' },
       { k: 'dataRecebimento', label: 'Data do recebimento', type: 'date', hint: 'Deixe em branco enquanto não receber.' },
       { k: 'valorRecebido', label: 'Valor recebido (R$)', type: 'number', hint: 'Se vazio e houver data de recebimento, vale o valor faturado.' },
       { k: 'obs', label: 'Observações', type: 'textarea' }],
-    pre: n => { if (n.dataRecebimento && n.valorRecebido == null) n.valorRecebido = n.valorFaturado; if (n.valorRecebido > 0 && !n.dataRecebimento) return 'Informe a data do recebimento.'; if (!n.dataRecebimento && n.valorRecebido == null) n.valorRecebido = null; }
+    pre: n => { if (n.m2 && n.precoM2) n.valorFaturado = Math.round(n.m2 * n.precoM2 * 100) / 100; if (!n.valorFaturado) return 'Informe o valor faturado, ou os m² e o valor por m².'; if (n.dataRecebimento && n.valorRecebido == null) n.valorRecebido = n.valorFaturado; if (n.valorRecebido > 0 && !n.dataRecebimento) return 'Informe a data do recebimento.'; if (!n.dataRecebimento && n.valorRecebido == null) n.valorRecebido = null; }
   };
 }
 function tabFin(c, s) {
@@ -2041,31 +2044,112 @@ function tabFin(c, s) {
 
 /* ---------- aba Custos ---------- */
 function specGasto(c) {
-  return { col: 'gastos', singular: 'custo', extra: { contratoId: c.id }, defaults: { data: todayISO(), categoria: 'Pessoal' },
-    fields: [{ k: 'data', label: 'Data *', type: 'date', req: true }, { k: 'categoria', label: 'Categoria *', type: 'select', opts: CATS_GASTO, blank: undefined, req: true },
+  return { col: 'gastos', singular: 'custo', extra: { contratoId: c.id }, defaults: { data: todayISO(), categoria: 'Combustível' },
+    fields: [{ k: 'data', label: 'Data *', type: 'date', req: true }, { k: 'categoria', label: 'Categoria *', type: 'select', opts: CATS_GASTO.concat(uniq(S.data.gastos.filter(g => g.contratoId === c.id).map(g => g.categoria)).filter(x => x && CATS_GASTO.indexOf(x) < 0)), blank: undefined, req: true },
       { k: 'descricao', label: 'Descrição', type: 'text' }, { k: 'valor', label: 'Valor (R$) *', type: 'number', req: true }] };
 }
+function precoDoContrato(c) {
+  if (+c.precoM2) return +c.precoM2;
+  if (c.valorContratado && c.m2Contratado) return Math.round(c.valorContratado / c.m2Contratado * 10000) / 10000;
+  const u = S.data.medicoes.filter(m => m.contratoId === c.id && m.precoM2).sort((a, b) => (b.competencia || '').localeCompare(a.competencia || ''))[0];
+  return u ? u.precoM2 : null;
+}
+const brl4 = n => n == null || !isFinite(n) ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4 });
+/* uma linha por mês: o que foi roçado/produzido, os custos do mês, o lucro e quanto sobrou no contrato */
+function mesesLucro(c, s) {
+  const mapa = {};
+  const get = k => mapa[k] || (mapa[k] = { mes: k, meds: [], m2: 0, produzido: 0, custo: 0 });
+  s.med.forEach(m => { if (!m.competencia) return; const r = get(m.competencia); r.meds.push(m); r.m2 += m.m2 || 0; r.produzido += m.valorFaturado || 0; });
+  s.gas.forEach(g => { if (!g.data) return; get(g.data.slice(0, 7)).custo += g.valor || 0; });
+  const l = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes));
+  let acum = 0;
+  l.forEach(r => { acum += r.produzido; r.acum = acum; r.lucro = r.produzido - r.custo; r.saldo = c.valorContratado ? c.valorContratado - acum : null; r.preco = r.m2 > 0 ? r.produzido / r.m2 : null; });
+  return l;
+}
+function specProducao(c) {
+  const sp = specMedicao(c);
+  sp.singular = 'mês de produção'; sp.defaults = Object.assign({}, sp.defaults, { valorFaturado: null });
+  sp.fields = [
+    { k: 'competencia', label: 'Mês *', type: 'month', req: true },
+    { k: 'm2', label: 'Metros quadrados roçados no mês', type: 'number' },
+    { k: 'precoM2', label: 'Valor por m² (R$)', type: 'number', step: '0.0001', hint: 'Vem do contrato. Pode ajustar.' },
+    { k: 'valorFaturado', label: 'Valor do mês (R$)', type: 'number', hint: 'Com m² e valor por m², é calculado sozinho (m² × valor).' },
+    { k: 'obs', label: 'Observações', type: 'textarea' }];
+  const base = sp.pre;
+  sp.pre = (n, orig) => {
+    if (S.data.medicoes.some(m => m.contratoId === c.id && m.competencia === n.competencia && (!orig || m.id !== orig.id))) return 'Já existe lançamento de ' + compLabel(n.competencia) + '. Toque na linha do mês para editar.';
+    if (!n.m2) n.precoM2 = null;
+    if (!n.m2 && !n.valorFaturado) return 'Informe os m² roçados e o valor por m², ou o valor do mês.';
+    const o = Object.assign({}, orig || {}, n); const msg = base(o, orig); if (msg) return msg;
+    n.valorFaturado = o.valorFaturado; n.valorRecebido = o.valorRecebido; if (o.valorRecebido == null) delete n.valorRecebido;
+  };
+  return sp;
+}
+function tabLucro(c, s) {
+  const meses = mesesLucro(c, s), hoje = todayISO().slice(0, 7);
+  const prod = sum(s.med, m => m.valorFaturado), m2 = sum(s.med, m => m.m2);
+  const total = c.valorContratado || 0, sobrou = total ? total - prod : null;
+  const mesAtual = meses.find(r => r.mes === hoje);
+  const lucro = prod - s.custoReal;
+  const m2Rest = c.m2Contratado ? c.m2Contratado - m2 : null;
+  const novo = () => crudForm(specProducao(c), null);
+  const abrir = r => r.meds.length ? crudForm(specProducao(c), r.meds[0]) : crudForm(Object.assign(specProducao(c), { defaults: { competencia: r.mes, precoM2: precoDoContrato(c) } }), null);
+  const pctUsado = total ? Math.min(1, prod / total) : 0;
+  const tab = meses.length ? h('div', { class: 'tbl-wrap' }, h('table', null,
+    h('thead', null, h('tr', null, ['Mês', 'm² roçados', 'Valor por m²', 'Produzido no mês', 'Custos do mês', 'Lucro do mês', 'Sobrou no contrato'].map((t, i) => h('th', { class: i ? 'r' : '' }, t)))),
+    h('tbody', null, meses.slice().reverse().map(r => h('tr', { class: 'row', tabindex: '0', onclick: () => abrir(r), onkeydown: ev => { if (ev.key === 'Enter') abrir(r); } },
+      h('td', null, h('span', { class: 'cell-t' }, compLabel(r.mes)), r.mes === hoje ? h('div', null, pill('mês atual', 'info')) : null),
+      h('td', { class: 'r' }, r.m2 ? fmtN(r.m2, 2) : '—'), h('td', { class: 'r' }, r.preco ? brl4(r.preco) : '—'),
+      h('td', { class: 'r' }, h('b', null, r.produzido ? brl(r.produzido, true) : '—')),
+      h('td', { class: 'r' }, r.custo ? brl(r.custo, true) : '—'),
+      h('td', { class: 'r' }, h('b', { style: { color: r.lucro >= 0 ? 'var(--ok)' : 'var(--bad)' } }, brl(r.lucro, true))),
+      h('td', { class: 'r' }, r.saldo == null ? '—' : brl(r.saldo, true))))),
+    h('tfoot', null, h('tr', null, h('td', null, h('b', null, 'Total')), h('td', { class: 'r' }, h('b', null, m2 ? fmtN(m2, 2) : '—')), h('td', null),
+      h('td', { class: 'r' }, h('b', null, brl(prod, true))), h('td', { class: 'r' }, h('b', null, brl(s.custoReal, true))), h('td', { class: 'r' }, h('b', null, brl(lucro, true))), h('td', { class: 'r' }, h('b', null, sobrou == null ? '—' : brl(sobrou, true))))))) 
+    : emptyState('Nenhum mês lançado', 'Lance, mês a mês, quantos m² foram roçados. O sistema multiplica pelo valor do m², abate do contrato e mostra o lucro depois de descontar os custos.', btn('Lançar mês', { kind: 'primary', icon: 'plus', onclick: novo }));
+  return h('div', null,
+    h('div', { class: 'grid g-kpi' },
+      fk('Valor do contrato', total ? brl(total) : '—', c.m2Contratado ? fmtN(c.m2Contratado, 0) + ' m² contratados' : (total ? 'total a receber no contrato' : 'informe em Dados do contrato')),
+      fk('Já produzido (abatido)', brl(prod), total ? pct(prod / total, 0) + ' do contrato · ' + fmtN(m2, 0) + ' m²' : fmtN(m2, 0) + ' m² roçados'),
+      fk('Sobrou no contrato', sobrou == null ? '—' : brl(Math.max(0, sobrou)), m2Rest != null ? fmtN(Math.max(0, m2Rest), 0) + ' m² ainda por roçar' : (sobrou != null && sobrou < 0 ? 'passou ' + brl(-sobrou) + ' do contrato' : 'valor que ainda dá para produzir'), sobrou != null && sobrou < 0 ? 'bad' : ''),
+      fk('Neste mês (' + compLabel(hoje) + ')', mesAtual && mesAtual.produzido ? brl(mesAtual.produzido) : '—', mesAtual && mesAtual.produzido ? (mesAtual.m2 ? fmtN(mesAtual.m2, 0) + ' m² roçados · ' : '') + 'lucro ' + brl(mesAtual.lucro) : 'nada lançado neste mês', mesAtual && mesAtual.produzido ? tone(mesAtual.lucro) : ''),
+      fk('Lucro até agora', prod ? brl(lucro) : '—', prod ? 'margem de ' + pct(lucro / prod, 0) : 'sem produção lançada', prod ? tone(lucro) : '')),
+    total ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'baseline' } }, h('h3', null, 'Quanto do contrato já foi feito'), h('span', { class: 'cell-s' }, brl(prod) + ' de ' + brl(total))),
+      h('div', { class: 'bar ' + (prod > total ? 'bad' : 'ok'), style: { margin: '10px 0 0', height: '12px' } }, h('i', { style: { width: (pctUsado * 100) + '%' } }))) : null,
+    h('div', { class: 'card', style: { marginTop: '16px' } },
+      h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } },
+        h('div', null, h('h3', null, 'Mês a mês'), h('p', { class: 'sub' }, 'Lucro = o que foi produzido no mês, menos os custos do mês (combustível, máquinas e oficina). Toque num mês para editar.')),
+        btn('Lançar mês', { kind: 'primary', icon: 'plus', onclick: novo })), tab),
+    meses.length ? h('p', { class: 'cell-s', style: { margin: '10px 4px 0' } }, 'Cada mês lançado aqui também aparece em Financeiro, como valor a receber. Os custos vêm da aba Custos.') : null);
+}
+
+/* ---------- aba Custos ---------- */
 function tabCustos(c, s) {
   const spec = specGasto(c);
   spec.cols = [{ h: 'Data', f: r => fmtD(r.data) }, { h: 'Categoria', f: r => pill(r.categoria || 'Outros') }, { h: 'Descrição', f: r => r.descricao || '' }, { h: 'Valor', r: true, f: r => brl(r.valor, true) }];
-  spec.emptyTitle = 'Nenhum custo lançado'; spec.emptyText = 'Lance os gastos reais do contrato (folha, combustível, manutenção, materiais…). Assim o sistema compara com o orçado e mostra o lucro de verdade.';
+  spec.emptyTitle = 'Nenhum custo lançado'; spec.emptyText = 'Lance o que o contrato gastou: combustível, máquinas, oficina, pessoal, materiais… O sistema soma por mês e desconta do lucro.';
   spec.footer = rows => h('tr', null, h('td', { colspan: 3 }, h('b', null, 'Total')), h('td', { class: 'r' }, h('b', null, brl(sum(rows, r => r.valor), true))));
   const rows = s.gas.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
   const porCat = {}; s.gas.forEach(g => { const k = g.categoria || 'Outros'; porCat[k] = (porCat[k] || 0) + (g.valor || 0); });
   const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
-  const cm = cats.length ? cats[0][1] : 1;
+  const hoje = todayISO().slice(0, 7), doMes = sum(s.gas.filter(g => (g.data || '').slice(0, 7) === hoje), g => g.valor);
+  const porMes = {}; s.gas.forEach(g => { const k = (g.data || '').slice(0, 7); if (k) porMes[k] = (porMes[k] || 0) + (g.valor || 0); });
+  const meses = Object.entries(porMes).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 6).map(x => [compLabel(x[0]), x[1]]);
   const consumo = s.custoOrc ? s.custoReal / s.custoOrc : null;
+  const cat = n => sum(s.gas.filter(g => g.categoria === n), g => g.valor);
   return h('div', null,
     h('div', { class: 'grid g-kpi' },
-      fk('Custo real', brl(s.custoReal), s.gas.length + ' lançamento' + (s.gas.length === 1 ? '' : 's')),
-      fk('Custo orçado', s.custoOrc != null ? brl(s.custoOrc) : '—', s.custoOrc != null ? (consumo != null ? pct(consumo, 0) + ' já consumido' : ' ') : 'sem orçamento ligado ao edital'),
-      fk('Faturado', brl(s.faturado), 'imposto estimado ' + brl(s.imposto) + ' (' + pct(s.aliq, 1) + ')'),
-      fk('Resultado', s.faturado ? brl(s.resultado) : '—', s.margem == null ? 'sem faturamento ainda' : 'margem de ' + pct(s.margem, 1), s.faturado ? tone(s.resultado) : ''),
-      fk('Resultado por real gasto', s.custoReal ? fmtN(s.resultado / s.custoReal, 2) : '—', 'lucro para cada R$ 1 de custo')),
-    consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Equipe e custos)'),
+      fk('Custo total', brl(s.custoReal), s.gas.length + ' lançamento' + (s.gas.length === 1 ? '' : 's')),
+      fk('Neste mês (' + compLabel(hoje) + ')', brl(doMes), doMes ? ' ' : 'nada lançado neste mês'),
+      fk('Combustível', brl(cat('Combustível')), s.custoReal ? pct(cat('Combustível') / s.custoReal, 0) + ' do custo' : ' '),
+      fk('Máquinas', brl(cat('Máquinas e equipamentos')), s.custoReal ? pct(cat('Máquinas e equipamentos') / s.custoReal, 0) + ' do custo' : ' '),
+      fk('Oficina', brl(cat('Oficina e manutenção')), s.custoReal ? pct(cat('Oficina e manutenção') / s.custoReal, 0) + ' do custo' : ' ')),
+    consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Custos e orçamento)'),
       h('div', { class: 'bar ' + (consumo > 1 ? 'bad' : consumo > 0.85 ? 'warn' : 'ok'), style: { margin: '10px 0 6px' } }, h('i', { style: { width: Math.min(100, consumo * 100) + '%' } })),
       h('div', { class: 'cell-s' }, brl(s.custoReal) + ' de ' + brl(s.custoOrc) + (consumo > 1 ? ': passou do orçado' : ''))) : null,
-    cats.length ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custos por categoria'), barList(cats.map(x => [x[0], x[1]]), cm, '', v => brl(v))) : null,
+    cats.length ? h('div', { class: 'grid g-2', style: { marginTop: '16px' } },
+      h('div', { class: 'card card-p' }, h('h3', null, 'Por categoria'), barList(cats, cats[0][1], '', v => brl(v))),
+      h('div', { class: 'card card-p' }, h('h3', null, 'Por mês'), barList(meses, Math.max.apply(null, meses.map(x => x[1])), 'warn', v => brl(v)))) : null,
     h('div', { class: 'card', style: { marginTop: '16px' } },
       h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Custos lançados'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), btn('Novo custo', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specGasto(c), null) })),
       crudTable(spec, rows)));
