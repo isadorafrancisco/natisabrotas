@@ -27,3 +27,4 @@ Nunca coloque a chave `service_role` neste repositório.
 - Calendário: Geral, um por contrato e Família. Contas da família ficam fora dos gastos da empresa.
 - Menu "Família": calendário, contas fixas e contas avulsas pessoais.
 - Menu "Financeiro geral": soma contratos, empresa e família no mês (gasto, já pago, falta pagar e lista do que vence).
+- Orçamento dentro da licitação: ao abrir um edital na lista, aparece o orçamento básico dele (equipe, duração, extras, preço mínimo e alvo). Cada edital guarda o seu. A aba "Equipe e custos" ficou com cadastros e a lista de todos os orçamentos.

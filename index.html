@@ -949,9 +949,9 @@ function detalheEdital(e) {
       dd('Vencedor', venc), dd('Diferença para o vencedor', dif == null ? null : (dif >= 0 ? '+' : '') + pct(dif, 1)),
       dd('Contato do vencedor', e.contatoVencedor),
       dd('O que o edital exige', e.exigencias, true), dd('Observações', e.obs, true)),
+    e.decisao === 'Descartar' ? null : h('div', { style: { marginTop: '18px' } }, h('div', { class: 'sec-t', style: { marginTop: 0 } }, 'Orçamento deste edital'), h('p', { class: 'cell-s', style: { margin: '0 0 10px' } }, 'Escolha quem e o que entra na equipe, a duração e os extras. O sistema calcula o preço mínimo e o preço-alvo. Salve para guardar neste edital.'), orcDoEdital(e)),
     h('div', { class: 'dact' },
       btn('Editar', { icon: 'edit', sm: true, onclick: () => editEdital(e) }),
-      btn('Orçar', { icon: 'custos', sm: true, onclick: () => orcarEdital(e) }),
       btn('Criar checklist na agenda', { icon: 'agenda', sm: true, onclick: () => criarChecklistEdital(e) }),
       isWin(e) ? btn(S.data.contratos.some(c => c.editalId === e.id) ? 'Ver contrato' : 'Abrir contrato', { icon: 'fechamento', sm: true, kind: 'primary', onclick: () => abrirFechamento(e) }) : null,
       btn('Excluir', { icon: 'trash', sm: true, kind: 'danger', onclick: () => excluirEdital(e) })));
@@ -971,7 +971,7 @@ const MODELO_EDITAL = [
   { t: 'Triagem: decidir participar, descartar ou acompanhar e registrar o motivo', base: 'cap', off: 2, etq: 'Triagem', resp: 'Renato' },
   { t: 'Conferir documentos e certidões da empresa escolhida', base: 'ses', off: -7, etq: 'Proposta', resp: 'Renato' },
   { t: 'Pedir orçamento de insumos e confirmar equipe e equipamentos', base: 'ses', off: -7, etq: 'Orçamento', resp: 'Renato' },
-  { t: 'Montar o preço em Custos e orçamento', base: 'ses', off: -5, etq: 'Orçamento', resp: 'Renato' },
+  { t: 'Montar o preço no orçamento do edital', base: 'ses', off: -5, etq: 'Orçamento', resp: 'Renato' },
   { t: 'Aprovar o preço mínimo e o lance máximo com o sócio', base: 'ses', off: -4, etq: 'Orçamento', resp: 'Sócio' },
   { t: 'Montar proposta e anexos', base: 'ses', off: -3, etq: 'Proposta', resp: 'Renato' },
   { t: 'Cadastrar a proposta no portal', base: 'ses', off: -1, etq: 'Proposta', resp: 'Renato' },
@@ -1594,11 +1594,15 @@ function calcOrc(o) {
   else v = { k: 'bad', t: 'Não cabe: o valor estimado não cobre o custo.' };
   return { mensal: mensal, direto: direto, indir: indir, custo: custo, alvo: alvo, minimo: minimo, equil: equil, est: est, margemEst: margemEst, v: v, mesesN: +o.meses || 0 };
 }
-function orcarEdital(e) {
-  S.ui.orc = Object.assign(newOrc(), { editalId: e.id, empresa: e.empresa && e.empresa !== 'Nenhuma' ? e.empresa : '', objeto: e.objeto || '', valorEstimado: e.valorEstimado, nome: (e.numero ? e.numero + ' · ' : '') + (e.orgao || '') });
-  S.ui.custosTab = 'orcamento'; go('custos');
+function orcInicial(e) {
+  const salvo = S.data.orcamentos.filter(x => x.editalId === e.id).sort((x, y) => (y.atualizadoEm || 0) - (x.atualizadoEm || 0))[0];
+  if (salvo) return Object.assign(newOrc(), salvo, { id: salvo.id });
+  return Object.assign(newOrc(), { editalId: e.id, empresa: e.empresa && e.empresa !== 'Nenhuma' ? e.empresa : '', objeto: e.objeto || '', valorEstimado: e.valorEstimado, nome: (e.numero ? e.numero + ' · ' : '') + (e.orgao || '') });
 }
-function viewOrcamento() {
+function orcarEdital(e) { S.ui.orc = orcInicial(e); S.ui.custosTab = 'orcamento'; go('custos'); }
+function orcDoEdital(e) { if (!S.ui.orc || S.ui.orc.editalId !== e.id) S.ui.orc = orcInicial(e); return viewOrcamento({ edital: e }); }
+function viewOrcamento(opts) {
+  const emb = opts && opts.edital;
   if (!S.ui.orc) S.ui.orc = newOrc();
   const o = S.ui.orc, res = h('div', { class: 'card orc-res' });
   function paintRes() {
@@ -1625,7 +1629,7 @@ function viewOrcamento() {
         btn('Salvar orçamento', { kind: 'primary', onclick: () => salvarOrc(o, calcOrc(o)) }),
         o.editalId && r.custo ? btn('Usar preço-alvo no edital', { onclick: () => usarNoEdital(o.editalId, r.alvo) }) : null,
         o.editalId && r.custo ? btn('Usar preço mínimo', { onclick: () => usarNoEdital(o.editalId, r.minimo) }) : null,
-        btn('Limpar', { kind: 'ghost', onclick: () => { S.ui.orc = newOrc(); render(); } })));
+        emb ? null : btn('Limpar', { kind: 'ghost', onclick: () => { S.ui.orc = newOrc(); render(); } })));
   }
   const bind = (k, el, num) => { el.addEventListener('input', () => { o[k] = num ? (el.value === '' ? null : parseFloat(el.value)) : el.value; paintRes(); }); return el; };
   const edSel = sel(S.data.editais.map(e => ({ v: e.id, l: (e.numero ? e.numero + ' · ' : '') + (e.orgao || 'Sem órgão') })), o.editalId, 'Orçamento avulso (sem edital)');
@@ -1645,7 +1649,7 @@ function viewOrcamento() {
   });
   const nomeIn = bind('nome', inp('text', o.nome, { placeholder: 'Ex.: 014/2026 · Prefeitura Exemplo' }));
   const form = h('div', { class: 'card card-p', style: { display: 'flex', flexDirection: 'column', gap: '16px' } },
-    fld('Edital', edSel),
+    emb ? null : fld('Edital', edSel),
     h('div', { class: 'row2' }, fld('Nome do orçamento', nomeIn), fld('Empresa responsável', bind('empresa', sel(EMP, o.empresa, '—')))),
     fld('Objeto', bind('objeto', inp('text', o.objeto))),
     h('div', { class: 'row3' }, fld('Valor estimado pelo órgão (R$)', bind('valorEstimado', inp('number', o.valorEstimado, { min: '0' }), true)), fld('Duração (meses)', bind('meses', inp('number', o.meses, { min: '1', step: '1' }), true)), fld('Equipes necessárias', bind('equipes', inp('number', o.equipes, { min: '1', step: '1' }), true))),
@@ -1656,6 +1660,7 @@ function viewOrcamento() {
     h('div', { class: 'row2' }, fld('Custos extras do edital, no total (R$)', bind('extras', inp('number', o.extras, { min: '0' }), true), h('span', { class: 'fld-h' }, 'Visita técnica, seguro-garantia, materiais, mobilização.')),
       fld('Custos indiretos (% do custo direto)', bind('indireto', inp('number', o.indireto, { min: '0' }), true), h('span', { class: 'fld-h' }, 'Estrutura e administrativo atribuídos a este contrato.'))));
   paintRes();
+  if (emb) return h('div', { class: 'orc' }, form, res);
   const saved = S.data.orcamentos.slice().sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0));
   return h('div', null,
     h('div', { class: 'orc' }, form, res),
@@ -1680,9 +1685,9 @@ async function usarNoEdital(id, valor) {
 
 function viewCustos() {
   const t = S.ui.custosTab;
-  const tabs = [['resumo', 'Resumo'], ['orcamento', 'Orçamento do edital'], ['equipe', 'Equipe'], ['equip', 'Equipamentos e veículos'], ['fixos', 'Custos fixos'], ['prem', 'Premissas']];
+  const tabs = [['resumo', 'Resumo'], ['orcamento', 'Orçamentos por edital'], ['equipe', 'Equipe'], ['equip', 'Equipamentos e veículos'], ['fixos', 'Custos fixos'], ['prem', 'Premissas']];
   const root = h('div');
-  root.append(pageHead('Custos e orçamento', 'Custo operacional das duas empresas e o preço mínimo de cada edital'));
+  root.append(pageHead('Equipe e custos', 'Equipe, equipamentos, custos fixos e premissas. O orçamento de cada edital fica dentro do próprio edital.'));
   root.append(h('div', { class: 'tabs', role: 'tablist' }, tabs.map(x => h('button', { class: 'tab', role: 'tab', 'aria-selected': String(t === x[0]), onclick: () => { S.ui.custosTab = x[0]; render(); } }, x[1]))));
   if (t === 'resumo') root.append(viewResumoCustos());
   else if (t === 'orcamento') root.append(viewOrcamento());
@@ -1993,7 +1998,7 @@ function tabCustos(c, s) {
       fk('Faturado', brl(s.faturado), 'imposto estimado ' + brl(s.imposto) + ' (' + pct(s.aliq, 1) + ')'),
       fk('Resultado', s.faturado ? brl(s.resultado) : '—', s.margem == null ? 'sem faturamento ainda' : 'margem de ' + pct(s.margem, 1), s.faturado ? tone(s.resultado) : ''),
       fk('Resultado por real gasto', s.custoReal ? fmtN(s.resultado / s.custoReal, 2) : '—', 'lucro para cada R$ 1 de custo')),
-    consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Custos e orçamento)'),
+    consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Equipe e custos)'),
       h('div', { class: 'bar ' + (consumo > 1 ? 'bad' : consumo > 0.85 ? 'warn' : 'ok'), style: { margin: '10px 0 6px' } }, h('i', { style: { width: Math.min(100, consumo * 100) + '%' } })),
       h('div', { class: 'cell-s' }, brl(s.custoReal) + ' de ' + brl(s.custoOrc) + (consumo > 1 ? ': passou do orçado' : ''))) : null,
     cats.length ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custos por categoria'), barList(cats.map(x => [x[0], x[1]]), cm, '', v => brl(v))) : null,
@@ -2474,7 +2479,7 @@ function importarEditais() {
 /* ================= CONTROLE DE GASTOS (Natisa): contrato de roçada, máquinas e contas a pagar ================= */
 /* A tela é desenhada dentro de um shadow root para não misturar estilos com o resto do sistema.
    Os dados ficam na mesma tabela `docs` do Supabase: abastecimentos, oficina, producao, contas e config/controle.
-   Funcionários vêm do cadastro que já existe em Custos e orçamento > Equipe. */
+   Funcionários vêm do cadastro que já existe em Equipe e custos > Equipe. */
 const CTLSYNC = { dirty: false };
 const viewControle = (function () {
   const CT = { tab: 'resumo', period: '30', calY: new Date().getFullYear(), calM: new Date().getMonth(), calSel: null, lTab: 'fuel', demoOff: false, M: null, contrato: null, calView: 'geral', ftab: 'calendario', mode: '' };
@@ -2708,7 +2713,7 @@ const viewControle = (function () {
     const have = new Set(S.data.funcionarios.map(f => norm(f.nome)));
     const novos = HOLERITES.filter(x => !have.has(norm(x[0])));
     if (!novos.length) { toast('Esses funcionários já estão cadastrados.'); return; }
-    if (!await askConfirm({ title: 'Importar funcionários', text: 'Cadastrar ' + novos.length + ' funcionários da Natisa com os salários dos holerites de julho/2026 e PPR de R$ 262,85? Eles aparecem também em Custos e orçamento > Equipe.', yes: 'Importar' })) return;
+    if (!await askConfirm({ title: 'Importar funcionários', text: 'Cadastrar ' + novos.length + ' funcionários da Natisa com os salários dos holerites de julho/2026 e PPR de R$ 262,85? Eles aparecem também em Equipe e custos > Equipe.', yes: 'Importar' })) return;
     try {
       for (const x of novos) await dbSave('funcionarios', null, { nome: x[0], funcao: '', empresa: 'Natisa', salario: x[1], ppr: 262.85, pctContrato: 1, alimTransp: 0, epi: 0, insalubridade: false, criadoEm: Date.now() });
       toast(novos.length + ' funcionários cadastrados');
@@ -3022,12 +3027,12 @@ const viewControle = (function () {
       '<label>Valor por m² do contrato avulso (R$)<input data-cfg="preco" data-kind="num" inputmode="decimal" value="' + inVal(c.preco) + '"></label>' +
       '<label>FGTS (% do salário)<input data-cfg="fgts" data-kind="pct" inputmode="decimal" value="' + inVal(c.fgts * 100) + '"></label>' +
       '<label>Alerta acima da média (%)<input data-cfg="tol" data-kind="pct" inputmode="decimal" value="' + inVal(c.tol * 100) + '"></label></div>' +
-      '<p class="note">O INSS patronal vem das Premissas de Custos e orçamento (' + PC(S.prem.inss) + '). A tabela do INSS do empregado (7,5% até R$ 1.621 e 9% até R$ 2.902,84) reproduz os holerites de julho; confirme com o contador.</p></section>';
-    h2 += '<section class="card"><div class="card-h"><div><h3>Funcionários</h3><p class="sub" style="margin:0">Vêm do cadastro de Custos e orçamento > Equipe (empresa Natisa ou Compartilhado). O custo vem das Premissas do sistema, mais o PPR de cada um.</p></div><div class="chips" style="margin:0"><button class="btn sm" data-a="importfunc" type="button">Importar dos holerites de julho</button><button class="btn sm primary" data-a="goequipe" type="button">Editar equipe</button></div></div><div class="scroll"><table><thead><tr><th>Nome</th><th>Empresa</th><th>Salário</th><th>PPR</th><th>% no contrato</th><th>Custo mensal</th><th>Custo semanal no contrato</th></tr></thead><tbody>' +
-      (E2.length ? E2.map(x => '<tr><td>' + E(x.f.nome) + '</td><td>' + E(x.f.empresa) + '</td><td>' + R(x.sal) + '</td><td>' + R(x.ppr) + '</td><td>' + Math.round(x.pc * 100) + '%</td><td>' + R(x.custo) + '</td><td>' + R(x.semana) + '</td></tr>').join('') + '<tr class="tot"><td>Total</td><td></td><td>' + R(sum(E2, x => x.sal)) + '</td><td>' + R(sum(E2, x => x.ppr)) + '</td><td></td><td>' + R(sum(E2, x => x.custo)) + '</td><td>' + R(M.funcSem) + '</td></tr>' : '<tr><td colspan="7">' + emptyBox('Nenhum funcionário da Natisa', 'Use "Importar dos holerites de julho" ou cadastre em Custos e orçamento.') + '</td></tr>') + '</tbody></table></div>' +
+      '<p class="note">O INSS patronal vem das Premissas de Equipe e custos (' + PC(S.prem.inss) + '). A tabela do INSS do empregado (7,5% até R$ 1.621 e 9% até R$ 2.902,84) reproduz os holerites de julho; confirme com o contador.</p></section>';
+    h2 += '<section class="card"><div class="card-h"><div><h3>Funcionários</h3><p class="sub" style="margin:0">Vêm do cadastro de Equipe e custos > Equipe (empresa Natisa ou Compartilhado). O custo vem das Premissas do sistema, mais o PPR de cada um.</p></div><div class="chips" style="margin:0"><button class="btn sm" data-a="importfunc" type="button">Importar dos holerites de julho</button><button class="btn sm primary" data-a="goequipe" type="button">Editar equipe</button></div></div><div class="scroll"><table><thead><tr><th>Nome</th><th>Empresa</th><th>Salário</th><th>PPR</th><th>% no contrato</th><th>Custo mensal</th><th>Custo semanal no contrato</th></tr></thead><tbody>' +
+      (E2.length ? E2.map(x => '<tr><td>' + E(x.f.nome) + '</td><td>' + E(x.f.empresa) + '</td><td>' + R(x.sal) + '</td><td>' + R(x.ppr) + '</td><td>' + Math.round(x.pc * 100) + '%</td><td>' + R(x.custo) + '</td><td>' + R(x.semana) + '</td></tr>').join('') + '<tr class="tot"><td>Total</td><td></td><td>' + R(sum(E2, x => x.sal)) + '</td><td>' + R(sum(E2, x => x.ppr)) + '</td><td></td><td>' + R(sum(E2, x => x.custo)) + '</td><td>' + R(M.funcSem) + '</td></tr>' : '<tr><td colspan="7">' + emptyBox('Nenhum funcionário da Natisa', 'Use "Importar dos holerites de julho" ou cadastre em Equipe e custos.') + '</td></tr>') + '</tbody></table></div>' +
       '<p class="note">O % no contrato é um campo do cadastro do funcionário. Vazio vale 100% para a Natisa e 0% para os demais. A folha líquida, o INSS e o FGTS das contas a pagar consideram só quem é da Natisa.</p></section>';
     h2 += '<section class="grid2"><div class="card"><div class="card-h"><h3>Máquinas</h3>' + (c.fromEquip ? '<button class="btn sm" data-a="goequip" type="button">Editar em Equipamentos</button>' : '<button class="btn sm primary" data-a="importmaq" type="button">Cadastrar em Equipamentos</button>') + '</div><div class="scroll"><table><thead><tr><th>Nome</th><th>Combustível</th></tr></thead><tbody>' +
-      c.maquinas.map(x => '<tr><td>' + E(x.nome) + '</td><td>' + E(x.comb) + '</td></tr>').join('') + '</tbody></table></div><p class="note">' + (c.fromEquip ? 'Esta lista vem de Custos e orçamento > Equipamentos e veículos: aparece toda máquina com o campo Combustível preenchido.' : 'Lista padrão, ainda fora de Equipamentos e veículos. Clique em Cadastrar para criar essas máquinas lá (dá para ajustar valor de compra, horas e seguro) e passar a usar um cadastro só.') + '</p></div>' +
+      c.maquinas.map(x => '<tr><td>' + E(x.nome) + '</td><td>' + E(x.comb) + '</td></tr>').join('') + '</tbody></table></div><p class="note">' + (c.fromEquip ? 'Esta lista vem de Equipe e custos > Equipamentos e veículos: aparece toda máquina com o campo Combustível preenchido.' : 'Lista padrão, ainda fora de Equipamentos e veículos. Clique em Cadastrar para criar essas máquinas lá (dá para ajustar valor de compra, horas e seguro) e passar a usar um cadastro só.') + '</p></div>' +
       '<div class="card"><div class="card-h"><h3>Contratos</h3><button class="btn sm" data-a="gocontratos" type="button">Abrir Contratos</button></div><div class="scroll"><table><thead><tr><th>Contrato</th><th>R$ por m²</th></tr></thead><tbody>' +
       M.list.map(x => '<tr><td>' + E(x.nome) + (x.id === M.dc ? ' <span class="pill mute">padrão</span>' : '') + '</td><td>' + R(x.preco) + '</td></tr>').join('') + '</tbody></table></div>' +
       '<label class="fld" style="margin-top:12px"><span class="fld-l">Contrato padrão (recebe a folha e os lançamentos antigos)</span><select data-cfg="contratoPadrao" data-kind="text"><option value=""' + (M.dc === 'rocada' ? ' selected' : '') + '>Contrato de roçada avulso</option>' + S.data.contratos.map(k => '<option value="' + E(k.id) + '"' + (M.dc === k.id ? ' selected' : '') + '>' + E(ctrNome(k)) + '</option>').join('') + '</select></label>' +
@@ -3296,7 +3301,7 @@ const NAV = [
   { g: 'Licitações', items: [['editais', 'Editais'], ['agenda', 'Agenda semanal']] },
   { g: 'Contratos', items: [['fechamento', 'Contratos']] },
   { g: 'Financeiro', items: [['geral', 'Financeiro geral'], ['controle', 'Controle de gastos'], ['familia', 'Família']] },
-  { g: 'Cadastros', items: [['clientes', 'Clientes'], ['cidades', 'Cidades'], ['custos', 'Custos e orçamento']] }
+  { g: 'Cadastros', items: [['clientes', 'Clientes'], ['cidades', 'Cidades'], ['custos', 'Equipe e custos']] }
 ];
 const app = document.getElementById('app');
 function navCount(r) {
