@@ -28,3 +28,4 @@ Nunca coloque a chave `service_role` neste repositório.
 - Menu "Família": calendário, contas fixas e contas avulsas pessoais.
 - Menu "Financeiro geral": soma contratos, empresa e família no mês (gasto, já pago, falta pagar e lista do que vence).
 - Orçamento dentro da licitação: ao abrir um edital na lista, aparece o orçamento básico dele (equipe, duração, extras, preço mínimo e alvo). Cada edital guarda o seu. A aba "Equipe e custos" ficou com cadastros e a lista de todos os orçamentos.
+- Painel: resumo de tudo na tela inicial (financeiro do mês com contratos, empresa e família; contratos; licitações e orçamentos; equipe, equipamentos e clientes), além das metas e da visão das licitações.

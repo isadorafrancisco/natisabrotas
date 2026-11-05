@@ -752,6 +752,69 @@ function goalCard(label, atual, meta, o) {
 }
 function kpi(label, value, sub) { return h('div', { class: 'card kpi' }, h('span', { class: 'kpi-l' }, label), h('span', { class: 'kpi-v' }, value), h('span', { class: 'kpi-s' }, sub || ' ')); }
 
+function painelResumo(today) {
+  const box = h('div');
+  const head = (t, sub, rota, rotulo) => h('div', { class: 'ph', style: { marginTop: '26px', marginBottom: '12px' } }, h('div', null, h('div', { class: 'sec-t', style: { margin: 0 } }, t), sub ? h('p', { class: 'cell-s', style: { margin: '2px 0 0' } }, sub) : null), h('div', { class: 'ph-act' }, btn(rotulo, { sm: true, onclick: () => go(rota) })));
+  /* financeiro */
+  let F = null; try { F = viewControle.financeiro(); } catch (e) { console.error(e); }
+  if (F) {
+    const { cur, prev } = F, vv = (a, b) => b ? (a >= b ? '↑ ' : '↓ ') + Math.abs(Math.round((a - b) / b * 100)) + '% sobre o mês anterior' : 'sem mês anterior para comparar';
+    box.append(head('Financeiro de ' + F.mes, 'Contratos, empresa e família somados', 'geral', 'Abrir Financeiro geral'));
+    box.append(h('div', { class: 'band' },
+      kpi('Gastamos no mês', brl(cur.gasto), vv(cur.gasto, prev.gasto)),
+      kpi('Falta pagar', brl(cur.aPagar), 'já pago em contas ' + brl(cur.pago)),
+      kpi('Vencido', brl(F.vencido), F.vencidoN ? F.vencidoN + ' conta(s) atrasada(s)' : 'nada atrasado'),
+      kpi('Receita dos contratos', brl(cur.receita), 'pelos m² lançados'),
+      kpi('Sobra depois de tudo', brl(F.sobra), 'receita menos todos os gastos'),
+      kpi('Família no mês', brl(cur.familia), 'falta pagar ' + brl(sum(cur.rows.filter(r => r.tipo === 'familia'), r => r.aPagar)))));
+    const orig = [['Contratos', cur.contratos], ['Empresa', cur.empresa], ['Família', cur.familia]];
+    const ser = F.serie.map(x => [x.l, x.gasto]);
+    box.append(h('div', { class: 'grid g-2', style: { marginTop: '16px' } },
+      h('div', { class: 'card card-p' }, h('h3', null, 'Quem gastou no mês'), h('p', { class: 'sub' }, 'Contratos, empresa e família'), cur.gasto ? barList(orig, Math.max(1, ...orig.map(x => x[1])), null, v => brl(v)) : h('p', { class: 'cell-s', style: { marginTop: '12px' } }, 'Ainda sem gastos neste mês.'),
+        h('h3', { style: { marginTop: '18px' } }, 'Gasto dos últimos 6 meses'), barList(ser, Math.max(1, ...ser.map(x => x[1])), null, v => brl(v))),
+      h('div', { class: 'card card-p' }, h('h3', null, 'Próximas contas a pagar'), h('p', { class: 'sub' }, 'Nos próximos 14 dias, de todos os donos'),
+        F.prox.length ? F.prox.map(b => h('div', { class: 'lrow', style: { cursor: 'pointer' }, role: 'button', tabindex: '0', onclick: () => go('geral'), onkeydown: ev => { if (ev.key === 'Enter') go('geral'); } },
+          h('div', { class: 'd' }, b.venc.slice(8, 10), h('small', null, MES3[+b.venc.slice(5, 7) - 1])),
+          h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { class: 'cell-t' }, b.cat), h('div', { class: 'cell-s' }, b.dono === 'familia' ? 'Família' : b.dono === 'contrato' ? 'Contrato' : 'Empresa')),
+          h('b', { class: 'tnum' }, brl(b.valor)), b.late ? pill('Vencida', 'bad') : null))
+          : h('p', { class: 'cell-s', style: { marginTop: '12px' } }, 'Nenhuma conta com valor e vencimento nos próximos 14 dias.'))));
+  }
+  /* contratos */
+  const ctr = S.data.contratos, ativos = ctr.filter(c => c.status === 'Em execução'), st = ativos.map(c => ({ c, f: fechStats(c) }));
+  box.append(head('Contratos', ativos.length + (ativos.length === 1 ? ' em execução' : ' em execução') + ' de ' + ctr.length + ' no total', 'fechamento', 'Abrir Contratos'));
+  box.append(h('div', { class: 'band' },
+    kpi('Em execução', ativos.length, ctr.length - ativos.length + ' encerrado(s) ou parado(s)'),
+    kpi('Valor contratado', brl(sum(ativos, c => c.valorContratado)), 'soma dos ativos'),
+    kpi('Faturado', brl(sum(st, x => x.f.faturado)), 'medições emitidas'),
+    kpi('A receber', brl(sum(st, x => x.f.aReceber)), 'faturado e ainda não recebido'),
+    kpi('Em atraso', brl(sum(st, x => x.f.atrasado)), 'medições vencidas'),
+    kpi('Resultado dos contratos', brl(sum(st, x => x.f.resultado)), 'faturado menos imposto e custo')));
+  if (st.length) box.append(h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'tbl-wrap' }, h('table', null,
+    h('thead', null, h('tr', null, ['Contrato', 'Contratado', 'Faturado', 'A receber', 'Custo orçado', 'Custo real', 'Resultado'].map((t, i) => h('th', { class: i ? 'r' : '' }, t)))),
+    h('tbody', null, st.map(({ c, f }) => h('tr', { class: 'row', onclick: () => go('fechamento/' + c.id) }, h('td', null, h('div', { class: 'cell-t' }, c.numeroContrato || c.numeroEdital || 'Contrato'), h('div', { class: 'cell-s' }, c.orgao || '')),
+      h('td', { class: 'r' }, brl(c.valorContratado)), h('td', { class: 'r' }, brl(f.faturado)), h('td', { class: 'r' }, brl(f.aReceber)), h('td', { class: 'r' }, f.custoOrc != null ? brl(f.custoOrc) : '—'), h('td', { class: 'r' }, brl(f.custoReal)), h('td', { class: 'r' }, brl(f.resultado)))))))));
+  /* licitações e orçamentos */
+  const semOrc = S.data.editais.filter(e => e.decisao === 'Participar' && !e.resultado && !S.data.orcamentos.some(o => o.editalId === e.id));
+  const abertos = S.data.editais.filter(e => !e.resultado && e.decisao !== 'Descartar');
+  const comOrc = S.data.orcamentos.filter(o => o.editalId);
+  box.append(head('Licitações e orçamentos', null, 'editais', 'Abrir Editais'));
+  box.append(h('div', { class: 'band' },
+    kpi('Editais em aberto', abertos.length, 'sem resultado e não descartados'),
+    kpi('Participando sem orçamento', semOrc.length, semOrc.length ? 'abra o edital e monte o orçamento' : 'todos orçados'),
+    kpi('Orçamentos salvos', S.data.orcamentos.length, comOrc.length + ' ligados a um edital'),
+    kpi('Preço-alvo em orçamentos', brl(sum(comOrc.filter(o => abertos.some(e => e.id === o.editalId)), o => o.res && o.res.alvo)), 'dos editais em aberto'),
+    kpi('Sessões em 7 dias', S.data.editais.filter(e => e.dataSessao && e.dataSessao >= today && e.dataSessao <= addDays(today, 7) && !e.resultado && e.decisao !== 'Descartar').length, 'confira a agenda'),
+    kpi('Tarefas abertas', S.data.tarefas.filter(t => t.status !== 'done').length, 'na agenda semanal')));
+  /* cadastros */
+  const nat = S.data.funcionarios;
+  box.append(head('Equipe, equipamentos e clientes', null, 'custos', 'Abrir Equipe e custos'));
+  box.append(h('div', { class: 'band' },
+    kpi('Funcionários', nat.length, brl(sum(nat, f => funcCusto(f).total)) + ' de custo mensal'),
+    kpi('Equipamentos', S.data.equipamentos.length, brl(sum(S.data.equipamentos, e => equipCusto(e).mensal)) + ' de custo mensal'),
+    kpi('Clientes', S.data.clientes.length, sum(S.data.clientes, c => (c.abordagens || []).length) + ' abordagens registradas'),
+    kpi('Cidades', S.data.cidades.length, 'cadastradas')));
+  return box;
+}
 function viewPainel() {
   const f = S.ui.painel, today = todayISO();
   const ws = weekStart(today), we = addDays(ws, 6);
@@ -784,7 +847,7 @@ function viewPainel() {
     h('div', { class: 'hero-in' },
       h('p', { class: 'hero-eyebrow' }, 'Semana de ' + fmtS(ws) + ' a ' + fmtS(we)),
       h('h1', null, 'Licitações da semana, ', h('em', null, 'tudo sob controle')),
-      h('p', { class: 'hero-sub' }, 'Capte, decida, orce e acompanhe cada edital em um só lugar, com a rotina do Renato e os custos das duas empresas.'),
+      h('p', { class: 'hero-sub' }, 'Licitações, contratos, orçamentos e todo o financeiro (contratos, empresa e família) resumidos em uma tela só.'),
       h('div', { class: 'hero-chips' },
         h('span', { class: 'hero-chip' }, h('b', null, edW.length), edW.length === 1 ? ' captado na semana' : ' captados na semana'),
         h('span', { class: 'hero-chip' }, h('b', null, prox7.length), prox7.length === 1 ? ' sessão nos próximos 7 dias' : ' sessões nos próximos 7 dias'),
@@ -803,8 +866,9 @@ function viewPainel() {
     goalCard('Tarefas atrasadas', atrasadas.length, 0, { zero: true }),
     goalCard('Resultados sem registro', semReg.length, 0, { zero: true })));
 
+  root.append(painelResumo(today));
   const fb = h('div', { class: 'ph', style: { marginTop: '26px', marginBottom: '12px' } },
-    h('div', { class: 'sec-t', style: { margin: 0 } }, 'Visão geral'),
+    h('div', { class: 'sec-t', style: { margin: 0 } }, 'Licitações: visão geral'),
     h('div', { class: 'ph-act' },
       h('label', { class: 'fld' }, sel(EMP, f.empresa, 'Todas as empresas', { 'aria-label': 'Empresa', onchange: ev => { f.empresa = ev.target.value; render(); } })),
       h('label', { class: 'fld' }, sel(anos, f.ano, 'Todos os anos', { 'aria-label': 'Ano', onchange: ev => { f.ano = ev.target.value; render(); } }))));
@@ -2917,14 +2981,9 @@ const viewControle = (function () {
     return '<p class="lead">Contas pontuais da família. Para marcar como paga, use o Calendário.</p><section class="card"><div class="card-h"><h3>Contas avulsas da família</h3><button class="btn sm primary" data-a="lancar" data-tab="conta" type="button">+ Conta avulsa</button></div>' +
       (a.length ? '<div class="scroll"><table><thead><tr><th>Vencimento</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>' + a.map(r => '<tr><td>' + fmtD(r.venc) + '</td><td>' + E(r.cat) + '</td><td style="text-align:left">' + E(r.desc) + '</td><td>' + R(r.valor) + '</td><td>' + E(r.status || 'Pendente') + '</td><td><button class="btn sm danger" data-a="delbill" data-id="' + r.id + '" type="button">Excluir</button></td></tr>').join('') + '</tbody></table></div>' : emptyBox('Nenhuma conta avulsa', 'Cadastre uma com + Conta avulsa.')) + '</section>';
   };
-  V.geral = function (M, draws) {
-    const t0 = new Date(); if (CT.gY == null) { CT.gY = t0.getFullYear(); CT.gM = t0.getMonth(); }
-    const keyOf = (y, m) => { const d = new Date(y, m, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
-    const key = keyOf(CT.gY, CT.gM), prevKey = keyOf(CT.gY, CT.gM - 1);
-    const cid = r => r.contratoId || M.dc, priceOf = id => (M.list.find(x => x.id === id) || M.ctr).preco;
-    const sumB = (l, f) => sum(l.filter(f || (() => true)), b => b.valor || 0);
-    /* tudo de um mês, por origem */
-    function agg(k) {
+  /* tudo de um mês, por origem */
+  function aggMes(M, k) {
+    const cid = r => r.contratoId || M.dc, sumB = (l, f) => sum(l.filter(f || (() => true)), b => b.valor || 0);
       const inM = x => (x.data || '').slice(0, 7) === k;
       const bm = M.bills.filter(b => b.mes === k), fuel = S.data.abastecimentos.filter(inM), ofi = S.data.oficina.filter(inM), prod = S.data.producao.filter(inM);
       const rows = M.list.map(c => {
@@ -2941,6 +3000,22 @@ const viewControle = (function () {
       return { rows, bm, cats, gasto: sum(rows, r => r.gasto), aPagar: sum(rows, r => r.aPagar), receita: sum(rows, r => r.rec), pago: sumB(bm, b => b.status === 'Pago'),
         contratos: sum(rows.filter(r => r.tipo === 'contrato'), r => r.gasto), empresa: rows[rows.length - 2].gasto, familia: rows[rows.length - 1].gasto };
     }
+  function financeiroResumo() {
+    const M = model(), t = new Date(), key = t.getFullYear() + '-' + pad(t.getMonth() + 1);
+    const cur = aggMes(M, key), pk = new Date(t.getFullYear(), t.getMonth() - 1, 1), prev = aggMes(M, pk.getFullYear() + '-' + pad(pk.getMonth() + 1));
+    const venc = M.bills.filter(M.isOver), serie = [];
+    for (let i = 5; i >= 0; i--) { const d = new Date(t.getFullYear(), t.getMonth() - i, 1); const g = aggMes(M, d.getFullYear() + '-' + pad(d.getMonth() + 1)); serie.push({ l: MES3[d.getMonth()], gasto: g.gasto }); }
+    const lim = addDays(M.td, 14), prox = M.bills.filter(b => b.venc && b.status !== 'Pago' && b.valor != null && b.venc <= lim).sort((a, b) => a.venc < b.venc ? -1 : 1).slice(0, 6).map(b => ({ id: b.id, cat: b.cat, valor: b.valor, venc: b.venc, dono: b.dono, late: M.isOver(b) }));
+    return { cur, prev, vencido: sum(venc, b => b.valor || 0), vencidoN: venc.length, sobra: cur.receita - cur.gasto, serie, prox, mes: MESES[t.getMonth()] + ' de ' + t.getFullYear() };
+  }
+  build.financeiro = financeiroResumo;
+  V.geral = function (M, draws) {
+    const t0 = new Date(); if (CT.gY == null) { CT.gY = t0.getFullYear(); CT.gM = t0.getMonth(); }
+    const keyOf = (y, m) => { const d = new Date(y, m, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
+    const key = keyOf(CT.gY, CT.gM), prevKey = keyOf(CT.gY, CT.gM - 1);
+    const cid = r => r.contratoId || M.dc, priceOf = id => (M.list.find(x => x.id === id) || M.ctr).preco;
+    const sumB = (l, f) => sum(l.filter(f || (() => true)), b => b.valor || 0);
+    const agg = k => aggMes(M, k);
     const cur = agg(key), prev = agg(prevKey);
     const venc = M.bills.filter(M.isOver), vencSum = sum(venc, b => b.valor || 0);
     const pend = cur.bm.filter(b => b.status !== 'Pago').sort((a, b) => (a.venc || '9') < (b.venc || '9') ? -1 : 1);
