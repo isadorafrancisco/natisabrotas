@@ -953,11 +953,11 @@ function detalheEdital(e) {
       btn('Editar', { icon: 'edit', sm: true, onclick: () => editEdital(e) }),
       btn('Orçar', { icon: 'custos', sm: true, onclick: () => orcarEdital(e) }),
       btn('Criar checklist na agenda', { icon: 'agenda', sm: true, onclick: () => criarChecklistEdital(e) }),
-      isWin(e) ? btn(S.data.contratos.some(c => c.editalId === e.id) ? 'Ver fechamento' : 'Abrir fechamento', { icon: 'fechamento', sm: true, kind: 'primary', onclick: () => abrirFechamento(e) }) : null,
+      isWin(e) ? btn(S.data.contratos.some(c => c.editalId === e.id) ? 'Ver contrato' : 'Abrir contrato', { icon: 'fechamento', sm: true, kind: 'primary', onclick: () => abrirFechamento(e) }) : null,
       btn('Excluir', { icon: 'trash', sm: true, kind: 'danger', onclick: () => excluirEdital(e) })));
 }
 async function excluirEdital(e) {
-  if (S.data.contratos.some(c => c.editalId === e.id)) { toast('Este edital tem um fechamento de licitação. Exclua o fechamento antes.', 'bad'); return; }
+  if (S.data.contratos.some(c => c.editalId === e.id)) { toast('Este edital tem um contrato aberto. Exclua o contrato antes.', 'bad'); return; }
   if (await askConfirm({ title: 'Excluir edital', text: 'Excluir "' + (e.numero || e.objeto || e.orgao || 'edital') + '"? Os cartões da agenda ligados a ele continuam.', yes: 'Excluir', danger: true })) { await dbDelete('editais', e.id); toast('Edital excluído'); }
 }
 function exportEditais() {
@@ -1756,20 +1756,20 @@ async function criarFechamento(e) {
 }
 async function abrirFechamento(e) {
   let c = S.data.contratos.find(x => x.editalId === e.id);
-  if (!c) { const id = await criarFechamento(e); toast('Fechamento aberto. Complete os dados do contrato.'); S.ui.fech.aba = 'dados'; go('fechamento/' + id); return; }
+  if (!c) { const id = await criarFechamento(e); toast('Contrato aberto. Complete os dados do contrato.'); S.ui.fech.aba = 'dados'; go('fechamento/' + id); return; }
   go('fechamento/' + c.id);
 }
 function novoFechamento() {
   const livres = S.data.editais.filter(e => isWin(e) && !S.data.contratos.some(c => c.editalId === e.id));
   if (!livres.length) {
-    openModal({ title: 'Novo fechamento', size: 'sm', body: [h('p', null, 'Não há edital ganho esperando fechamento. Na tela Editais, marque o resultado do edital como Atendido (ganhamos) e depois abra o fechamento por lá ou por aqui.')],
+    openModal({ title: 'Novo contrato', size: 'sm', body: [h('p', null, 'Não há edital ganho esperando contrato. Na tela Editais, marque o resultado do edital como Atendido (ganhamos) e depois abra o fechamento por lá ou por aqui.')],
       footer: [h('button', { class: 'btn', onclick: closeModal }, 'Fechar'), h('button', { class: 'btn primary', onclick: () => { closeModal(); go('editais'); } }, 'Ir para Editais')] });
     return;
   }
   const s = sel(livres.map(e => ({ v: e.id, l: (e.numero ? e.numero + ' · ' : '') + (e.orgao || 'Sem órgão') + (e.valorProposto ? ' · ' + brl(e.valorProposto) : '') })), livres[0].id);
-  openModal({ title: 'Novo fechamento', size: 'sm', body: [h('p', { class: 'cell-s', style: { marginBottom: '10px' } }, 'Escolha o edital que ganhamos. Os dados dele já vêm para o fechamento.'), fld('Edital ganho', s)],
+  openModal({ title: 'Novo contrato', size: 'sm', body: [h('p', { class: 'cell-s', style: { marginBottom: '10px' } }, 'Escolha o edital que ganhamos. Os dados dele já vêm para o fechamento.'), fld('Edital ganho', s)],
     footer: [h('button', { class: 'btn', onclick: closeModal }, 'Cancelar'),
-      h('button', { class: 'btn primary', onclick: async () => { const e = byId('editais', s.value); closeModal(); if (e) abrirFechamento(e); } }, 'Abrir fechamento')] });
+      h('button', { class: 'btn primary', onclick: async () => { const e = byId('editais', s.value); closeModal(); if (e) abrirFechamento(e); } }, 'Abrir contrato')] });
 }
 
 /* ---------- lista ---------- */
@@ -1780,10 +1780,10 @@ function viewFechamento() {
   const st = all.map(c => ({ c, s: fechStats(c), v: vigenciaInfo(c) }));
   const ativos = st.filter(x => x.c.status === 'Em execução');
   const root = h('div');
-  root.append(pageHead('Fechamento de licitações', all.length + (all.length === 1 ? ' contrato' : ' contratos') + ': tudo de cada licitação ganha em um lugar só',
-    btn('Novo fechamento', { kind: 'primary', icon: 'plus', onclick: novoFechamento })));
+  root.append(pageHead('Contratos', all.length + (all.length === 1 ? ' contrato' : ' contratos') + ': tudo de cada licitação ganha em um lugar só',
+    btn('Novo contrato', { kind: 'primary', icon: 'plus', onclick: novoFechamento })));
   if (!all.length) {
-    root.append(h('div', { class: 'card' }, emptyState('Nenhuma licitação fechada ainda', 'Quando ganharmos um edital, abra o fechamento dele aqui (ou pelo botão "Abrir fechamento" no edital ganho). Cada contrato reúne dados, financeiro, custos, pendências e documentos.', btn('Novo fechamento', { kind: 'primary', icon: 'plus', onclick: novoFechamento }))));
+    root.append(h('div', { class: 'card' }, emptyState('Nenhum contrato ainda', 'Quando ganharmos um edital, abra o contrato dele aqui (ou pelo botão "Abrir contrato" no edital ganho). Cada contrato reúne dados, financeiro, custos, pendências e documentos.', btn('Novo contrato', { kind: 'primary', icon: 'plus', onclick: novoFechamento }))));
     return root;
   }
   root.append(h('div', { class: 'band' },
@@ -1828,7 +1828,7 @@ function viewContrato(c) {
   const root = h('div');
   root.append(h('button', { class: 'btn ghost sm', style: { marginBottom: '8px', paddingLeft: '4px' }, onclick: () => go('fechamento') }, icon('back', 15), 'Todos os fechamentos'));
   root.append(pageHead(c.orgao || 'Contrato', c.objeto || '',
-    [btn('Editar dados', { icon: 'edit', onclick: () => editarContrato(c) }), btn('Excluir fechamento', { icon: 'trash', kind: 'danger', onclick: () => excluirContrato(c) })]));
+    [btn('Editar dados', { icon: 'edit', onclick: () => editarContrato(c) }), btn('Excluir contrato', { icon: 'trash', kind: 'danger', onclick: () => excluirContrato(c) })]));
   root.append(h('div', { class: 'chips', style: { marginTop: '-6px' } },
     c.empresa ? pill(c.empresa, empKind(c.empresa)) : null, pill(c.status, statusKind(c.status)), pill(v.txt, v.kind),
     c.numeroContrato ? pill('Contrato ' + c.numeroContrato, 'info') : null, c.numeroEdital ? pill('Edital ' + c.numeroEdital) : null, exTag(c)));
@@ -1839,11 +1839,11 @@ function viewContrato(c) {
 }
 async function excluirContrato(c) {
   const n = S.data.medicoes.filter(x => x.contratoId === c.id).length + S.data.gastos.filter(x => x.contratoId === c.id).length + S.data.pendencias.filter(x => x.contratoId === c.id).length + S.data.arquivos.filter(x => x.contratoId === c.id).length;
-  if (!await askConfirm({ title: 'Excluir fechamento', text: 'Excluir o fechamento de "' + (c.orgao || 'contrato') + '"? ' + (n ? 'Isso apaga também ' + n + ' registros ligados a ele (medições, custos, pendências e documentos). ' : '') + 'O edital continua na tela Editais.', yes: 'Excluir', danger: true })) return;
+  if (!await askConfirm({ title: 'Excluir contrato', text: 'Excluir o contrato de "' + (c.orgao || 'contrato') + '"? ' + (n ? 'Isso apaga também ' + n + ' registros ligados a ele (medições, custos, pendências e documentos). ' : '') + 'O edital continua na tela Editais.', yes: 'Excluir', danger: true })) return;
   const arqs = S.data.arquivos.filter(a => a.contratoId === c.id);
   if (arqs.length && S.files) { try { await S.files.remove(arqs.map(a => a.path)); } catch (e) { toast('Não foi possível apagar os arquivos: ' + e.message, 'bad'); return; } }
   for (const col of ['medicoes', 'gastos', 'pendencias', 'arquivos']) for (const r of S.data[col].filter(x => x.contratoId === c.id)) await dbDelete(col, r.id);
-  await dbDelete('contratos', c.id); toast('Fechamento excluído'); go('fechamento');
+  await dbDelete('contratos', c.id); toast('Contrato excluído'); go('fechamento');
 }
 
 /* ---------- aba Resumo ---------- */
@@ -2976,11 +2976,11 @@ const viewControle = (function () {
       '<p class="note">O % no contrato é um campo do cadastro do funcionário. Vazio vale 100% para a Natisa e 0% para os demais. A folha líquida, o INSS e o FGTS das contas a pagar consideram só quem é da Natisa.</p></section>';
     h2 += '<section class="grid2"><div class="card"><div class="card-h"><h3>Máquinas</h3>' + (c.fromEquip ? '<button class="btn sm" data-a="goequip" type="button">Editar em Equipamentos</button>' : '<button class="btn sm primary" data-a="importmaq" type="button">Cadastrar em Equipamentos</button>') + '</div><div class="scroll"><table><thead><tr><th>Nome</th><th>Combustível</th></tr></thead><tbody>' +
       c.maquinas.map(x => '<tr><td>' + E(x.nome) + '</td><td>' + E(x.comb) + '</td></tr>').join('') + '</tbody></table></div><p class="note">' + (c.fromEquip ? 'Esta lista vem de Custos e orçamento > Equipamentos e veículos: aparece toda máquina com o campo Combustível preenchido.' : 'Lista padrão, ainda fora de Equipamentos e veículos. Clique em Cadastrar para criar essas máquinas lá (dá para ajustar valor de compra, horas e seguro) e passar a usar um cadastro só.') + '</p></div>' +
-      '<div class="card"><div class="card-h"><h3>Contratos</h3><button class="btn sm" data-a="gocontratos" type="button">Abrir Fechamento</button></div><div class="scroll"><table><thead><tr><th>Contrato</th><th>R$ por m²</th></tr></thead><tbody>' +
+      '<div class="card"><div class="card-h"><h3>Contratos</h3><button class="btn sm" data-a="gocontratos" type="button">Abrir Contratos</button></div><div class="scroll"><table><thead><tr><th>Contrato</th><th>R$ por m²</th></tr></thead><tbody>' +
       M.list.map(x => '<tr><td>' + E(x.nome) + (x.id === M.dc ? ' <span class="pill mute">padrão</span>' : '') + '</td><td>' + R(x.preco) + '</td></tr>').join('') + '</tbody></table></div>' +
       '<label class="fld" style="margin-top:12px"><span class="fld-l">Contrato padrão (recebe a folha e os lançamentos antigos)</span><select data-cfg="contratoPadrao" data-kind="text"><option value=""' + (M.dc === 'rocada' ? ' selected' : '') + '>Contrato de roçada avulso</option>' + S.data.contratos.map(k => '<option value="' + E(k.id) + '"' + (M.dc === k.id ? ' selected' : '') + '>' + E(ctrNome(k)) + '</option>').join('') + '</select></label>' +
       (M.dc === 'rocada' ? '<label class="fld" style="margin-top:8px"><span class="fld-l">Nome do contrato avulso</span><input class="cell-in" data-arr="servicos" data-i="0" data-k="*" value="' + E(c.servicos[0] || '') + '"></label>' : '') +
-      '<p class="note">Cada contrato do Fechamento em execução aparece aqui sozinho. Informe o valor por m² no cadastro do contrato (campo Valor pago por m²). Quando escolher o contrato padrão, o avulso deixa de aparecer.</p></div></section>';
+      '<p class="note">Cada contrato em execução aparece aqui sozinho. Informe o valor por m² no cadastro do contrato (campo Valor pago por m²). Quando escolher o contrato padrão, o avulso deixa de aparecer.</p></div></section>';
     h2 += '<section class="card"><h3>Contas fixas mensais</h3><p class="sub">Cada uma entra no calendário todo mês, no dia indicado. Sem dia, fica em "Falta preencher". Valor vazio usa o cálculo automático, quando houver.</p><div class="scroll"><table><thead><tr><th>Conta</th><th>Valor estimado (R$)</th><th>Dia do vencimento</th><th>Valor automático</th></tr></thead><tbody>' +
       c.fixas.map((x, i) => '<tr><td><input class="cell-in" style="min-width:220px" data-arr="fixas" data-i="' + i + '" data-k="nome" value="' + E(x.nome) + '"></td><td><input class="cell-in" data-arr="fixas" data-i="' + i + '" data-k="valor" data-kind="numn" inputmode="decimal" value="' + inVal(x.valor) + '" placeholder="–"></td><td><input class="cell-in" style="min-width:70px" data-arr="fixas" data-i="' + i + '" data-k="dia" data-kind="dia" inputmode="numeric" value="' + (x.dia || '') + '" placeholder="–"></td><td style="color:var(--muted)">' + (x.auto === 'folha' ? 'Salários líquidos dos funcionários' : x.auto === 'inss' ? 'INSS do empregado + patronal' : x.auto === 'fgts' ? 'FGTS dos funcionários' : '–') + '</td></tr>').join('') + '</tbody></table></div><p class="note">DAS, INSS e FGTS vêm com dia 20 como ponto de partida; confirme com o contador. Dias de 1 a 28.</p></section>';
     return h2;
@@ -3242,7 +3242,7 @@ const ROUTES = { painel: viewPainel, controle: () => viewControle('empresa'), fa
 const NAV = [
   { g: 'Visão geral', items: [['painel', 'Painel']] },
   { g: 'Licitações', items: [['editais', 'Editais'], ['agenda', 'Agenda semanal']] },
-  { g: 'Contratos', items: [['fechamento', 'Fechamento']] },
+  { g: 'Contratos', items: [['fechamento', 'Contratos']] },
   { g: 'Financeiro', items: [['geral', 'Financeiro geral'], ['controle', 'Controle de gastos'], ['familia', 'Família']] },
   { g: 'Cadastros', items: [['clientes', 'Clientes'], ['cidades', 'Cidades'], ['custos', 'Custos e orçamento']] }
 ];
