@@ -2171,38 +2171,41 @@ function tabCustos(c, s) {
   const mesesLista = uniq(todas.map(g => (g.data || '').slice(0, 7)).filter(Boolean));
   const mesSel = mesesLista.indexOf(S.ui.fech.mesCusto) >= 0 ? S.ui.fech.mesCusto : '';
   const rows = mesSel ? todas.filter(g => (g.data || '').slice(0, 7) === mesSel) : todas;
-  const porCat = {}; s.gas.forEach(g => { const k = g.categoria || 'Outros'; porCat[k] = (porCat[k] || 0) + (g.valor || 0); });
+  const totM = sum(rows, g => g.valor);
+  const porCat = {}; rows.forEach(g => { const k = g.categoria || 'Outros'; porCat[k] = (porCat[k] || 0) + (g.valor || 0); });
   const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
   const hoje = todayISO().slice(0, 7), doMes = sum(s.gas.filter(g => (g.data || '').slice(0, 7) === hoje), g => g.valor);
   const porMes = {}; s.gas.forEach(g => { const k = (g.data || '').slice(0, 7); if (k) porMes[k] = (porMes[k] || 0) + (g.valor || 0); });
   const meses = Object.entries(porMes).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12).map(x => [compLabel(x[0]), x[1]]);
   const consumo = s.custoOrc ? s.custoReal / s.custoOrc : null;
-  const cat = n => sum(s.gas.filter(g => g.categoria === n), g => g.valor);
+  const cat = n => sum(rows.filter(g => g.categoria === n), g => g.valor);
+  const seletor = mesesLista.length > 1 ? h('div', { style: { marginBottom: '14px' } },
+    h('div', { class: 'chips' }, h('span', { class: 'cell-s', style: { alignSelf: 'center', marginRight: '4px' } }, 'Mês:'), [['', 'Todos os meses']].concat(mesesLista.map(m => [m, compLabel(m)])).map(x => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(mesSel === x[0]), onclick: () => { S.ui.fech.mesCusto = x[0]; render(); } }, x[1]))),
+    mesSel ? h('p', { class: 'cell-s', style: { margin: '8px 0 0' } }, 'Mostrando só ' + compLabel(mesSel) + ': números, máquinas, categorias e lista. O gráfico Por mês e o comparativo com o orçado mostram o contrato todo.') : null) : null;
   return h('div', null,
+    seletor,
     h('div', { class: 'grid g-kpi' },
-      fk('Custo total', brl(s.custoReal), s.gas.length + ' lançamento' + (s.gas.length === 1 ? '' : 's')),
+      fk('Custo total' + (mesSel ? ' · ' + compLabel(mesSel) : ''), brl(totM), rows.length + ' lançamento' + (rows.length === 1 ? '' : 's')),
       fk('Neste mês (' + compLabel(hoje) + ')', brl(doMes), doMes ? ' ' : 'nada lançado neste mês'),
-      fk('Combustível', brl(cat('Combustível')), s.custoReal ? pct(cat('Combustível') / s.custoReal, 0) + ' do custo' : ' '),
-      fk('Máquinas', brl(cat('Máquinas e equipamentos')), s.custoReal ? pct(cat('Máquinas e equipamentos') / s.custoReal, 0) + ' do custo' : ' '),
-      fk('Oficina', brl(cat('Oficina e manutenção')), s.custoReal ? pct(cat('Oficina e manutenção') / s.custoReal, 0) + ' do custo' : ' ')),
+      fk('Combustível', brl(cat('Combustível')), totM ? pct(cat('Combustível') / totM, 0) + ' do custo' : ' '),
+      fk('Máquinas', brl(cat('Máquinas e equipamentos')), totM ? pct(cat('Máquinas e equipamentos') / totM, 0) + ' do custo' : ' '),
+      fk('Oficina', brl(cat('Oficina e manutenção')), totM ? pct(cat('Oficina e manutenção') / totM, 0) + ' do custo' : ' ')),
     consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Custos e orçamento)'),
       h('div', { class: 'bar ' + (consumo > 1 ? 'bad' : consumo > 0.85 ? 'warn' : 'ok'), style: { margin: '10px 0 6px' } }, h('i', { style: { width: Math.min(100, consumo * 100) + '%' } })),
       h('div', { class: 'cell-s' }, brl(s.custoReal) + ' de ' + brl(s.custoOrc) + (consumo > 1 ? ': passou do orçado' : ''))) : null,
-    secMaquinas(c),
+    secMaquinas(c, mesSel),
     cats.length ? h('div', { class: 'grid g-2', style: { marginTop: '16px' } },
       h('div', { class: 'card card-p' }, h('h3', null, 'Por categoria'), barList(cats, cats[0][1], '', v => brl(v))),
       h('div', { class: 'card card-p' }, h('h3', null, 'Por mês'), barList(meses, Math.max.apply(null, meses.map(x => x[1])), 'warn', v => brl(v)))) : null,
     h('div', { class: 'card', style: { marginTop: '16px' } },
       h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } }, h('div', null, h('h3', null, 'Custos lançados'), h('p', { class: 'sub' }, 'Toque numa linha para editar')), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, S.db ? btn('Importar planilha', { icon: 'upload', onclick: () => importarGastos(c) }) : null, btn('Novo custo', { kind: 'primary', icon: 'plus', onclick: () => crudForm(specGasto(c), null) }))),
-      mesesLista.length > 1 ? h('div', { class: 'card-p', style: { paddingTop: 0 } },
-        h('div', { class: 'chips' }, [['', 'Todos os meses']].concat(mesesLista.map(m => [m, compLabel(m)])).map(x => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(mesSel === x[0]), onclick: () => { S.ui.fech.mesCusto = x[0]; render(); } }, x[1]))),
-        h('p', { class: 'cell-s', style: { margin: '10px 0 0' } }, (mesSel ? compLabel(mesSel) : 'Todos os meses') + ': ' + rows.length + (rows.length === 1 ? ' lançamento' : ' lançamentos') + ', total ' + brl(sum(rows, r => r.valor), true))) : null,
+      mesSel ? h('div', { class: 'card-p', style: { paddingTop: 0 } }, h('p', { class: 'cell-s', style: { margin: 0 } }, compLabel(mesSel) + ': ' + rows.length + (rows.length === 1 ? ' lançamento' : ' lançamentos') + ', total ' + brl(totM, true))) : null,
       crudTable(spec, rows)));
 }
 
-function secMaquinas(c) {
+function secMaquinas(c, mes) {
   const api = window.CTL_API; if (!api) return null;
-  const M = api.maquinas(c.id);
+  const M = api.maquinas(c.id, mes);
   const per = api.period();
   const chips = [['sem', 'Esta semana'], ['30', 'Últimos 30 dias'], ['all', 'Tudo']].map(p => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(per === p[0]), onclick: () => { api.setPeriod(p[0]); render(); } }, p[1]));
   const acts = M ? [btn('Abastecimento', { icon: 'plus', sm: true, kind: 'primary', onclick: () => api.lancar('fuel', c.id) }), btn('Oficina', { icon: 'plus', sm: true, onclick: () => api.lancar('ofi', c.id) }), btn('Área roçada', { icon: 'plus', sm: true, onclick: () => api.lancar('prod', c.id) })] : [];
@@ -2214,12 +2217,12 @@ function secMaquinas(c) {
   else if (M.demo) body = emptyState('Nenhum lançamento de máquinas ainda', 'Lance abastecimentos, oficina e a área roçada deste contrato. Os cartões de cada máquina aparecem aqui.');
   else {
     const mq = M.machines.slice().sort((a, b) => b.total - a.total);
-    const avisos = M.alerts.filter(a => /^(Semana atual|Semana passada|Nenhuma produção)/.test(a.x));
+    const avisos = mes ? [] : M.alerts.filter(a => /^(Semana atual|Semana passada|Nenhuma produção)/.test(a.x));
     const T = { comb: sum(mq, m => m.combR), ofi: sum(mq, m => m.ofiR), lit: sum(mq, m => m.litros), m2: sum(mq, m => m.m2) };
     const mx = Math.max(1, ...mq.map(m => m.total));
     body = h('div', { class: 'card-p', style: { paddingTop: 0 } },
-      h('div', { class: 'chips', style: { marginBottom: '12px' } }, chips),
-      h('p', { class: 'cell-s', style: { margin: '0 0 12px' } }, 'No período: combustível ' + brl(T.comb, true) + ' · oficina ' + brl(T.ofi, true) + ' · ' + fmtN(T.lit, 1) + ' L · ' + (T.m2 ? fmtN(T.m2, 0) + ' m² roçados' : 'sem área lançada')),
+      mes ? null : h('div', { class: 'chips', style: { marginBottom: '12px' } }, chips),
+      h('p', { class: 'cell-s', style: { margin: '0 0 12px' } }, (mes ? compLabel(mes) : 'No período') + ': combustível ' + brl(T.comb, true) + ' · oficina ' + brl(T.ofi, true) + ' · ' + fmtN(T.lit, 1) + ' L · ' + (T.m2 ? fmtN(T.m2, 0) + ' m² roçados' : 'sem área lançada')),
       avisos.length ? avisos.map(a => h('div', { class: 'note', style: { marginBottom: '8px', background: a.t === 'warn' ? 'var(--warn-bg)' : '', color: a.t === 'warn' ? 'var(--warn)' : '' } }, a.x.replace(/ Confira a aba Produção\./, ''))) : null,
       mq.length ? h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,250px),1fr))', gap: '14px' } }, mq.map(m => h('div', { class: 'card card-p' },
         h('h3', null, m.nome), h('p', { class: 'sub', style: { margin: 0 } }, m.comb || 'Combustível não informado'),
@@ -3061,7 +3064,7 @@ const viewControle = (function () {
     }
 
     /* máquinas e serviços no período */
-    const inP = d => CT.period === 'all' ? true : CT.period === 'sem' ? wkOf(d) === nowW : (diffDays(td, d) >= 0 && diffDays(td, d) < 30);
+    const inP = d => CT.period === 'all' ? true : /^\d{4}-\d{2}$/.test(CT.period) ? (d || '').slice(0, 7) === CT.period : CT.period === 'sem' ? wkOf(d) === nowW : (diffDays(td, d) >= 0 && diffDays(td, d) < 30);
     const mnames = cfg.maquinas.map(m => m.nome);
     [fuel, ofi, prod].forEach(a => a.forEach(r => { if (r.maquina && mnames.indexOf(r.maquina) < 0) mnames.push(r.maquina); }));
     const machines = mnames.map(nm => {
@@ -3734,7 +3737,7 @@ input:focus{border-color:var(--primary)}
     nome: c => ctrNome(c),
     period: () => CT.period,
     setPeriod: p => { CT.period = p; },
-    maquinas: id => { const prev = CT.contrato; CT.contrato = id; let M = null; try { M = model(); } catch (e) { console.error(e); } CT.contrato = prev; return M && M.selId === id ? M : null; },
+    maquinas: (id, mes) => { const prev = CT.contrato, pp = CT.period; CT.contrato = id; if (mes) CT.period = mes; let M = null; try { M = model(); } catch (e) { console.error(e); } CT.contrato = prev; CT.period = pp; return M && M.selId === id ? M : null; },
     lancar: (tab, id) => { CT.contrato = id; try { CT.M = model(); } catch (e) {} const x = contratosList(getCfg()).find(z => z.id === id); openLancar(tab, { servico: x && x.nome }); }
   };
   return build;
