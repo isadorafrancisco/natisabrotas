@@ -2169,7 +2169,8 @@ function tabCustos(c, s) {
   const todas = s.gas.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
   /* filtro por mês da lista de custos */
   const mesesLista = uniq(todas.map(g => (g.data || '').slice(0, 7)).filter(Boolean));
-  const mesSel = mesesLista.indexOf(S.ui.fech.mesCusto) >= 0 ? S.ui.fech.mesCusto : '';
+  const hojeM = todayISO().slice(0, 7), faixa = mesesLista.concat([hojeM]).sort(), mesLo = faixa[0], mesHi = faixa[faixa.length - 1];
+  const mesSel = /^\d{4}-\d{2}$/.test(S.ui.fech.mesCusto || '') && S.ui.fech.mesCusto >= mesLo && S.ui.fech.mesCusto <= mesHi ? S.ui.fech.mesCusto : '';
   const rows = mesSel ? todas.filter(g => (g.data || '').slice(0, 7) === mesSel) : todas;
   const totM = sum(rows, g => g.valor);
   const porCat = {}; rows.forEach(g => { const k = g.categoria || 'Outros'; porCat[k] = (porCat[k] || 0) + (g.valor || 0); });
@@ -2179,7 +2180,7 @@ function tabCustos(c, s) {
   const meses = Object.entries(porMes).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12).map(x => [compLabel(x[0]), x[1]]);
   const consumo = s.custoOrc ? s.custoReal / s.custoOrc : null;
   const cat = n => sum(rows.filter(g => g.categoria === n), g => g.valor);
-  const seletor = mesesLista.length > 1 ? h('div', { style: { marginBottom: '14px' } },
+  const seletor = mesesLista.length > 0 ? h('div', { style: { marginBottom: '14px' } },
     h('div', { class: 'chips' }, h('span', { class: 'cell-s', style: { alignSelf: 'center', marginRight: '4px' } }, 'Mês:'), [['', 'Todos os meses']].concat(mesesLista.map(m => [m, compLabel(m)])).map(x => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(mesSel === x[0]), onclick: () => { S.ui.fech.mesCusto = x[0]; render(); } }, x[1]))),
     mesSel ? h('p', { class: 'cell-s', style: { margin: '8px 0 0' } }, 'Mostrando só ' + compLabel(mesSel) + ': números, máquinas, categorias e lista. O gráfico Por mês e o comparativo com o orçado mostram o contrato todo.') : null) : null;
   return h('div', null,
@@ -2193,7 +2194,7 @@ function tabCustos(c, s) {
     consumo != null ? h('div', { class: 'card card-p', style: { marginTop: '16px' } }, h('h3', null, 'Custo real contra o orçado'), h('p', { class: 'sub' }, 'O orçado vem do orçamento salvo para este edital (Custos e orçamento)'),
       h('div', { class: 'bar ' + (consumo > 1 ? 'bad' : consumo > 0.85 ? 'warn' : 'ok'), style: { margin: '10px 0 6px' } }, h('i', { style: { width: Math.min(100, consumo * 100) + '%' } })),
       h('div', { class: 'cell-s' }, brl(s.custoReal) + ' de ' + brl(s.custoOrc) + (consumo > 1 ? ': passou do orçado' : ''))) : null,
-    secMaquinas(c, mesSel),
+    secMaquinas(c, mesSel, mesLo, mesHi),
     cats.length ? h('div', { class: 'grid g-2', style: { marginTop: '16px' } },
       h('div', { class: 'card card-p' }, h('h3', null, 'Por categoria'), barList(cats, cats[0][1], '', v => brl(v))),
       h('div', { class: 'card card-p' }, h('h3', null, 'Por mês'), barList(meses, Math.max.apply(null, meses.map(x => x[1])), 'warn', v => brl(v)))) : null,
@@ -2203,11 +2204,19 @@ function tabCustos(c, s) {
       crudTable(spec, rows)));
 }
 
-function secMaquinas(c, mes) {
+function shiftMes(k, d) { const p = k.split('-').map(Number), t = new Date(p[0], p[1] - 1 + d, 1); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); }
+function secMaquinas(c, mes, lo, hi) {
   const api = window.CTL_API; if (!api) return null;
   const M = api.maquinas(c.id, mes);
   const per = api.period();
-  const chips = [['sem', 'Esta semana'], ['30', 'Últimos 30 dias'], ['all', 'Tudo']].map(p => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(per === p[0]), onclick: () => { api.setPeriod(p[0]); render(); } }, p[1]));
+  const hojeM = todayISO().slice(0, 7);
+  const chips = [['sem', 'Esta semana'], ['30', 'Últimos 30 dias'], ['all', 'Tudo']].map(p => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(!mes && per === p[0]), onclick: () => { S.ui.fech.mesCusto = ''; api.setPeriod(p[0]); render(); } }, p[1]))
+    .concat([h('button', { class: 'chip', type: 'button', 'aria-pressed': String(!!mes), onclick: () => { S.ui.fech.mesCusto = mes || hojeM; render(); } }, 'Mês')]);
+  const navMes = mes ? h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' } },
+    h('button', { class: 'btn sm', type: 'button', 'aria-label': 'Mês anterior', disabled: mes <= lo, onclick: () => { S.ui.fech.mesCusto = shiftMes(mes, -1); render(); } }, '‹'),
+    h('b', { style: { minWidth: '150px', textAlign: 'center' } }, compLabel(mes)),
+    h('button', { class: 'btn sm', type: 'button', 'aria-label': 'Próximo mês', disabled: mes >= hi, onclick: () => { S.ui.fech.mesCusto = shiftMes(mes, 1); render(); } }, '›'),
+    mes !== hojeM ? h('button', { class: 'btn sm', type: 'button', onclick: () => { S.ui.fech.mesCusto = hojeM; render(); } }, 'Este mês') : null) : null;
   const acts = M ? [btn('Abastecimento', { icon: 'plus', sm: true, kind: 'primary', onclick: () => api.lancar('fuel', c.id) }), btn('Oficina', { icon: 'plus', sm: true, onclick: () => api.lancar('ofi', c.id) }), btn('Área roçada', { icon: 'plus', sm: true, onclick: () => api.lancar('prod', c.id) })] : [];
   const head = h('div', { class: 'card-p', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' } },
     h('div', null, h('h3', null, 'Máquinas deste contrato'), h('p', { class: 'sub' }, 'Combustível e oficina de cada máquina neste contrato. A folha não entra aqui. Cada lançamento entra sozinho em Custos lançados, no lucro do contrato e no Controle de gastos.')),
@@ -2221,7 +2230,8 @@ function secMaquinas(c, mes) {
     const T = { comb: sum(mq, m => m.combR), ofi: sum(mq, m => m.ofiR), lit: sum(mq, m => m.litros), m2: sum(mq, m => m.m2) };
     const mx = Math.max(1, ...mq.map(m => m.total));
     body = h('div', { class: 'card-p', style: { paddingTop: 0 } },
-      mes ? null : h('div', { class: 'chips', style: { marginBottom: '12px' } }, chips),
+      h('div', { class: 'chips', style: { marginBottom: '12px' } }, chips),
+      navMes,
       h('p', { class: 'cell-s', style: { margin: '0 0 12px' } }, (mes ? compLabel(mes) : 'No período') + ': combustível ' + brl(T.comb, true) + ' · oficina ' + brl(T.ofi, true) + ' · ' + fmtN(T.lit, 1) + ' L · ' + (T.m2 ? fmtN(T.m2, 0) + ' m² roçados' : 'sem área lançada')),
       avisos.length ? avisos.map(a => h('div', { class: 'note', style: { marginBottom: '8px', background: a.t === 'warn' ? 'var(--warn-bg)' : '', color: a.t === 'warn' ? 'var(--warn)' : '' } }, a.x.replace(/ Confira a aba Produção\./, ''))) : null,
       mq.length ? h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,250px),1fr))', gap: '14px' } }, mq.map(m => h('div', { class: 'card card-p' },
@@ -2231,7 +2241,7 @@ function secMaquinas(c, mes) {
         h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px', marginTop: '12px', fontSize: '13px' } },
           [['Combustível', brl(m.combR, true)], ['Oficina', brl(m.ofiR, true)], ['Litros', fmtN(m.litros, 1) + ' L'], ['Preço médio', m.rl != null ? brl(m.rl, true) + '/L' : '–'], ['Área roçada', m.m2 ? fmtN(m.m2, 0) + ' m²' : '–'], ['Custo por 1.000 m²', m.t1000 != null ? brl(m.t1000, true) : '–']]
             .map(x => h('div', null, h('div', { class: 'cell-s' }, x[0]), h('b', null, x[1])))))))
-        : h('p', { class: 'cell-s' }, 'Nenhuma máquina cadastrada. Cadastre em Controle de gastos > Ajustes.'));
+        : h('p', { class: 'cell-s' }, mes ? 'Nada lançado em máquinas em ' + compLabel(mes) + '.' : 'Nenhuma máquina cadastrada. Cadastre em Controle de gastos > Ajustes.'));
   }
   return h('div', { class: 'card', style: { marginTop: '16px' } }, head, body);
 }
