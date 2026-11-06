@@ -2910,7 +2910,7 @@ const viewControle = (function () {
   }
   const donoTxt = r => r.dono === 'familia' ? 'Família' : r.dono === 'contrato' ? 'Contrato' : 'Empresa';
   const TIPOS_OFI = ['Peça', 'Mão de obra', 'Lubrificante / óleo', 'Lâmina / fio de nylon', 'Pneu', 'Outro'];
-  const FTABS = [['calendario', 'Calendário'], ['fixas', 'Contas fixas'], ['avulsas', 'Contas avulsas']];
+  const FTABS = [['calendario', 'Calendário'], ['mes', 'Por mês'], ['fixas', 'Contas fixas'], ['avulsas', 'Contas avulsas']];
   const TABS = [['resumo', 'Resumo'], ['contrato', 'Contrato'], ['producao', 'Produção'], ['maquinas', 'Máquinas'], ['gastos', 'Gasto total'], ['calendario', 'Calendário'], ['lanc', 'Lançamentos'], ['ajustes', 'Ajustes']];
   const DOW3 = DIAS.map(d => d.slice(0, 3));
 
@@ -3331,6 +3331,22 @@ const viewControle = (function () {
     if (M.list.length < 2) return '';
     return '<div class="chips"><span class="sub" style="margin:0 6px 0 0;align-self:center">Contrato:</span>' + M.list.map(x => '<button class="chip" data-a="ctr" data-id="' + E(x.id) + '" aria-pressed="' + (M.selId === x.id) + '" type="button">' + E(x.nome) + '</button>').join('') + '</div>';
   }
+  /* lançar as contas da família mês a mês: fixas (já vêm com o valor do cadastro, se houver) e avulsas do mês */
+  V.fam_mes = function (M) {
+    const y = CT.calY, m = CT.calM, key = y + '-' + pad(m + 1), td = M.td;
+    const mine = M.bills.filter(b => b.dono === 'familia' && b.mes === key).sort((a, b) => (a.venc || '9999') < (b.venc || '9999') ? -1 : (a.venc || '9999') > (b.venc || '9999') ? 1 : 0);
+    const falta = mine.filter(b => b.valor == null || !b.venc), ok = mine.filter(b => !(b.valor == null || !b.venc));
+    const tot = sum(mine, b => b.valor || 0), pago = sum(mine.filter(b => b.status === 'Pago'), b => b.valor || 0), pend = tot - pago;
+    const dentro = M.months.some(x => x.key === key), nome = MESES[m].charAt(0).toUpperCase() + MESES[m].slice(1) + ' de ' + y;
+    const dataNova = key === td.slice(0, 7) ? td : key + '-01';
+    let h2 = '<p class="lead">Escolha o mês e lance as contas da família dele. As contas fixas já vêm com o valor do cadastro; as que não têm valor aparecem primeiro, para você preencher. Valor e vencimento salvam sozinhos.</p>';
+    h2 += '<section class="card"><div class="cal-head"><h3 class="mes">' + nome + '</h3><div class="chips" style="margin:0"><button class="btn sm" data-a="calnav" data-d="-1" type="button" aria-label="Mês anterior">‹</button><button class="btn sm" data-a="calnav" data-d="0" type="button">Hoje</button><button class="btn sm" data-a="calnav" data-d="1" type="button" aria-label="Próximo mês">›</button><button class="btn sm primary" data-a="lancar" data-tab="conta" data-date="' + dataNova + '" type="button">+ Conta neste mês</button></div></div></section>';
+    h2 += '<section class="kpis">' + kpiH('Total do mês', R0(tot), mine.length + (mine.length === 1 ? ' conta' : ' contas')) + kpiH('Já pago', R0(pago), pago ? '' : 'nada pago ainda', pago ? 'ok' : '') + kpiH('A pagar', R0(pend), pend ? '' : (mine.length ? 'tudo pago' : ' '), pend ? 'warn' : '') + kpiH('Falta preencher', String(falta.length), falta.length ? 'sem valor ou sem vencimento' : 'tudo preenchido', falta.length ? 'bad' : 'ok') + '</section>';
+    if (!mine.length) return h2 + '<section class="card">' + (dentro ? emptyBox('Nenhuma conta neste mês', 'Cadastre as contas fixas em Contas fixas ou use + Conta neste mês.') : emptyBox('Mês fora do período do controle', 'O controle cobre de ' + M.months[0].label + ' a ' + M.months[M.months.length - 1].label + '. Use + Conta neste mês para lançar uma conta avulsa aqui.')) + '</section>';
+    if (falta.length) h2 += '<section class="card"><h3>Falta preencher</h3><p class="sub">Informe o valor e o vencimento de cada conta.</p>' + falta.map(b => billRow(b, M, true)).join('') + '</section>';
+    if (ok.length) h2 += '<section class="card"><h3>' + (falta.length ? 'Já preenchidas' : 'Contas do mês') + '</h3><p class="sub">Para marcar como paga, use o botão de cada conta.</p>' + ok.map(b => billRow(b, M, true)).join('') + '</section>';
+    return h2;
+  };
   V.fam_fixas = function (M) {
     const c = M.cfg;
     return '<p class="lead">Contas que se repetem todo mês na família (escola, prestação, plano de saúde, condomínio). Entram no calendário da família no dia indicado.</p>' +
